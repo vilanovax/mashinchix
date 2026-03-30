@@ -10,6 +10,6 @@ import { BuySellSignalService } from '../data-platform/buy-sell-signal.service';
   imports: [PriceHistoryModule, ScoringModule, IntelligenceModule],
   controllers: [CarsController],
   providers: [CarsService, BuySellSignalService],
-  exports: [CarsService],
+  exports: [CarsService, BuySellSignalService],
 })
 export class CarsModule {}

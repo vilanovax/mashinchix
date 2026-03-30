@@ -45,12 +45,30 @@ export class DataPlatformScheduler {
     const delayBuySell =
       this.config.get<number>('DATA_JOB_BUY_SELL_DELAY_MS') ??
       delayScores + 180_000;
+    const delayInsights =
+      this.config.get<number>('DATA_JOB_INSIGHTS_DELAY_MS') ??
+      delayBuySell + 60_000;
+    const delayAlerts =
+      this.config.get<number>('DATA_JOB_ALERTS_DELAY_MS') ??
+      delayInsights + 60_000;
+    const delayUserNotifications =
+      this.config.get<number>('DATA_JOB_USER_NOTIFICATIONS_DELAY_MS') ??
+      delayAlerts + 60_000;
+    const delayPersonalized =
+      this.config.get<number>('DATA_JOB_PERSONALIZED_INSIGHTS_DELAY_MS') ??
+      delayUserNotifications + 60_000;
+    const delayMarketReports =
+      this.config.get<number>('DATA_JOB_MARKET_REPORTS_DELAY_MS') ??
+      delayPersonalized + 60_000;
     const delayBehavior =
       this.config.get<number>('DATA_JOB_BEHAVIOR_METRICS_DELAY_MS') ??
-      delayBuySell + 120_000;
+      delayMarketReports + 120_000;
     const delayPreferenceSignals =
       this.config.get<number>('DATA_JOB_PREFERENCE_SIGNALS_DELAY_MS') ??
       delayBehavior + 120_000;
+    const delayModelEvaluation =
+      this.config.get<number>('DATA_JOB_MODEL_EVALUATION_DELAY_MS') ??
+      delayPreferenceSignals + 180_000;
 
     await this.queue.add('scrape-divar', {}, { removeOnComplete: 50 });
     await this.queue.add(
@@ -94,6 +112,31 @@ export class DataPlatformScheduler {
       { delay: delayBuySell, removeOnComplete: 50 },
     );
     await this.queue.add(
+      'generate-market-insights',
+      {},
+      { delay: delayInsights, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-market-alerts',
+      {},
+      { delay: delayAlerts, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-user-notifications',
+      {},
+      { delay: delayUserNotifications, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-personalized-insights',
+      {},
+      { delay: delayPersonalized, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-market-reports',
+      {},
+      { delay: delayMarketReports, removeOnComplete: 50 },
+    );
+    await this.queue.add(
       'recompute-behavior-metrics-daily',
       {},
       { delay: delayBehavior, removeOnComplete: 50 },
@@ -103,9 +146,14 @@ export class DataPlatformScheduler {
       {},
       { delay: delayPreferenceSignals, removeOnComplete: 50 },
     );
+    await this.queue.add(
+      'run-model-evaluation',
+      {},
+      { delay: delayModelEvaluation, removeOnComplete: 20 },
+    );
 
     this.logger.log(
-      `Enqueued pipeline: clean +${delayClean}ms, aggregate +${delayAgg}ms, metrics +${delayMetrics}ms, predictions +${delayPredictions}ms, liquidity +${delayLiquidityStats}ms, cycle +${delayMarketCycle}ms, scores +${delayScores}ms, buySell +${delayBuySell}ms, behavior +${delayBehavior}ms, prefs +${delayPreferenceSignals}ms`,
+      `Enqueued pipeline: clean +${delayClean}ms, aggregate +${delayAgg}ms, metrics +${delayMetrics}ms, predictions +${delayPredictions}ms, liquidity +${delayLiquidityStats}ms, cycle +${delayMarketCycle}ms, scores +${delayScores}ms, buySell +${delayBuySell}ms, insights +${delayInsights}ms, alerts +${delayAlerts}ms, userNotif +${delayUserNotifications}ms, personalized +${delayPersonalized}ms, reports +${delayMarketReports}ms, behavior +${delayBehavior}ms, prefs +${delayPreferenceSignals}ms, modelEval +${delayModelEvaluation}ms`,
     );
   }
 }

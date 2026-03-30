@@ -27,8 +27,14 @@ export class DataPlatformAdminController {
       delayMarketCycleMs?: number;
       delayScoresMs?: number;
       delayBuySellMs?: number;
+      delayInsightsMs?: number;
+      delayAlertsMs?: number;
+      delayUserNotificationsMs?: number;
+      delayPersonalizedInsightsMs?: number;
+      delayMarketReportsMs?: number;
       delayBehaviorMetricsMs?: number;
       delayPreferenceSignalsMs?: number;
+      delayModelEvaluationMs?: number;
     } = {},
   ) {
     if (this.config.get<string>('ALLOW_DATA_PLATFORM_ADMIN') !== 'true') {
@@ -71,14 +77,38 @@ export class DataPlatformAdminController {
       body.delayBuySellMs ??
       this.config.get<number>('DATA_JOB_BUY_SELL_DELAY_MS') ??
       delayScores + 180_000;
+    const delayInsights =
+      body.delayInsightsMs ??
+      this.config.get<number>('DATA_JOB_INSIGHTS_DELAY_MS') ??
+      delayBuySell + 60_000;
+    const delayAlerts =
+      body.delayAlertsMs ??
+      this.config.get<number>('DATA_JOB_ALERTS_DELAY_MS') ??
+      delayInsights + 60_000;
+    const delayUserNotifications =
+      body.delayUserNotificationsMs ??
+      this.config.get<number>('DATA_JOB_USER_NOTIFICATIONS_DELAY_MS') ??
+      delayAlerts + 60_000;
+    const delayPersonalized =
+      body.delayPersonalizedInsightsMs ??
+      this.config.get<number>('DATA_JOB_PERSONALIZED_INSIGHTS_DELAY_MS') ??
+      delayUserNotifications + 60_000;
+    const delayMarketReports =
+      body.delayMarketReportsMs ??
+      this.config.get<number>('DATA_JOB_MARKET_REPORTS_DELAY_MS') ??
+      delayPersonalized + 60_000;
     const delayBehavior =
       body.delayBehaviorMetricsMs ??
       this.config.get<number>('DATA_JOB_BEHAVIOR_METRICS_DELAY_MS') ??
-      delayBuySell + 120_000;
+      delayMarketReports + 120_000;
     const delayPreferenceSignals =
       body.delayPreferenceSignalsMs ??
       this.config.get<number>('DATA_JOB_PREFERENCE_SIGNALS_DELAY_MS') ??
       delayBehavior + 120_000;
+    const delayModelEvaluation =
+      body.delayModelEvaluationMs ??
+      this.config.get<number>('DATA_JOB_MODEL_EVALUATION_DELAY_MS') ??
+      delayPreferenceSignals + 180_000;
 
     await this.queue.add('scrape-divar', {}, { removeOnComplete: 50 });
     await this.queue.add(
@@ -122,6 +152,31 @@ export class DataPlatformAdminController {
       { delay: delayBuySell, removeOnComplete: 50 },
     );
     await this.queue.add(
+      'generate-market-insights',
+      {},
+      { delay: delayInsights, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-market-alerts',
+      {},
+      { delay: delayAlerts, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-user-notifications',
+      {},
+      { delay: delayUserNotifications, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-personalized-insights',
+      {},
+      { delay: delayPersonalized, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'generate-market-reports',
+      {},
+      { delay: delayMarketReports, removeOnComplete: 50 },
+    );
+    await this.queue.add(
       'recompute-behavior-metrics-daily',
       {},
       { delay: delayBehavior, removeOnComplete: 50 },
@@ -130,6 +185,11 @@ export class DataPlatformAdminController {
       'recompute-user-preference-signals',
       {},
       { delay: delayPreferenceSignals, removeOnComplete: 50 },
+    );
+    await this.queue.add(
+      'run-model-evaluation',
+      {},
+      { delay: delayModelEvaluation, removeOnComplete: 20 },
     );
 
     return {
@@ -142,8 +202,14 @@ export class DataPlatformAdminController {
       delayMarketCycleMs: delayMarketCycle,
       delayScoresMs: delayScores,
       delayBuySellMs: delayBuySell,
+      delayInsightsMs: delayInsights,
+      delayAlertsMs: delayAlerts,
+      delayUserNotificationsMs: delayUserNotifications,
+      delayPersonalizedInsightsMs: delayPersonalized,
+      delayMarketReportsMs: delayMarketReports,
       delayBehaviorMetricsMs: delayBehavior,
       delayPreferenceSignalsMs: delayPreferenceSignals,
+      delayModelEvaluationMs: delayModelEvaluation,
     };
   }
 }

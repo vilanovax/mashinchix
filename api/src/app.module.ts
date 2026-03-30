@@ -15,6 +15,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
 import { ScoresModule } from './scores/scores.module';
 import { TrackingModule } from './tracking/tracking.module';
+import { IntelligenceDeliveryModule } from './delivery/intelligence-delivery.module';
+import { PublicModule } from './public/public.module';
+import { PortfolioModule } from './portfolio/portfolio.module';
+import { ScenarioModule } from './scenario/scenario.module';
 
 const bullDisabled = process.env.DISABLE_BULLMQ === 'true';
 
@@ -50,6 +54,10 @@ const queueImports = bullDisabled
     AdminModule,
     AnalyticsModule,
     UserProfileModule,
+    IntelligenceDeliveryModule,
+    PublicModule,
+    PortfolioModule,
+    ScenarioModule,
   ],
 })
 export class AppModule {}

@@ -13,8 +13,13 @@ import { DataPlatformProcessor } from './data-platform.processor';
 import { DataPlatformScheduler } from './data-platform.scheduler';
 import { DataPlatformAdminController } from './data-platform-admin.controller';
 import { TrackingModule } from '../tracking/tracking.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
+import { IntelligenceDeliveryModule } from '../delivery/intelligence-delivery.module';
 import { CarLiquidityStatsService } from './car-liquidity-stats.service';
 import { MarketCycleService } from './market-cycle.service';
+import { MarketInsightsService } from './market-insights.service';
+import { MarketAlertsService } from './market-alerts.service';
+import { ModelEvaluationModule } from '../model-evaluation/model-evaluation.module';
 
 @Module({
   imports: [
@@ -24,6 +29,9 @@ import { MarketCycleService } from './market-cycle.service';
     ScoringModule,
     PredictionModule,
     TrackingModule,
+    AnalyticsModule,
+    IntelligenceDeliveryModule,
+    ModelEvaluationModule,
   ],
   controllers: [DataPlatformAdminController],
   providers: [
@@ -35,6 +43,8 @@ import { MarketCycleService } from './market-cycle.service';
     CarLiquidityStatsService,
     MarketCycleService,
     BuySellSignalService,
+    MarketInsightsService,
+    MarketAlertsService,
     DataPlatformProcessor,
     DataPlatformScheduler,
   ],

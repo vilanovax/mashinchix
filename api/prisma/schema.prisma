@@ -75,6 +75,11 @@ model User {
   userEvents             UserEvent[]
   recommendationSessions RecommendationSession[]
   preferenceSignals      UserPreferenceSignal[]
+  watchlistCars          UserWatchlist[]
+  notifications          UserNotification[]
+  personalizedInsights   PersonalizedInsight[]
+  portfolioSimulations    PortfolioSimulation[]
+  portfolioRecommendations UserPortfolioRecommendation[]
 }
 
 enum ListingSource {
@@ -86,6 +91,87 @@ enum MarketCycleType {
   BULL
   BEAR
   STABLE
+}
+
+enum InsightType {
+  FASTEST_RISING_PRICE
+  FASTEST_FALLING_PRICE
+  HIGH_MOMENTUM
+  HIGH_VOLATILITY
+  LOW_VOLATILITY
+  UNDERVALUED
+  OVERVALUED
+  HIGH_DEMAND_LOW_SUPPLY
+  HIGH_SUPPLY_LOW_DEMAND
+  FASTEST_SELLING
+  SLOWEST_SELLING
+  ENTERING_BULL_TREND
+  ENTERING_BEAR_TREND
+  BEST_INVESTMENT_OPPORTUNITY
+  HIGH_RISK_ALERT
+  MARKET_TURNING_POINT
+  SEGMENT_ROTATION
+  LIQUIDITY_SPIKE
+  DEMAND_SPIKE
+}
+
+enum MarketAlertType {
+  PRICE_DROP
+  VOLATILITY_SPIKE
+  MARKET_ENTERING_BEAR
+  MARKET_ENTERING_BULL
+  CAR_ILLIQUID
+  BEST_INVESTMENT_SIGNAL
+  SEGMENT_OVERHEATING
+  SEGMENT_CRASH_RISK
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum UserNotificationType {
+  PRICE_DROP
+  PRICE_RISE
+  BUY_SIGNAL
+  SELL_SIGNAL
+  HIGH_RISK
+  MARKET_ALERT
+  INSIGHT
+  WATCHLIST_UPDATE
+  RECOMMENDATION
+  MARKET_REPORT
+}
+
+enum PersonalizedInsightType {
+  FAVORITE_SEGMENT_REGIME
+  WATCHLIST_PRICE_CONTEXT
+  SEGMENT_PEERS_MOMENTUM
+  LOW_RISK_IN_BUDGET
+  PROFILE_INVESTMENT_MATCH
+  RECENT_BEHAVIOR_NUDGE
+}
+
+enum MarketReportFrequency {
+  DAILY
+  WEEKLY
+}
+
+enum BacktestStrategyName {
+  BUY_ON_BUY_SIGNAL
+  BUY_TOP_INVESTMENT_SCORE
+  BUY_LOW_RISK
+  BUY_HIGH_MOMENTUM
+  BUY_UNDERVALUE
+  SEGMENT_ROTATION
+  MARKET_CYCLE_STRATEGY
+  RECOMMENDATION_TOP1
+  RECOMMENDATION_TOP3
+  HOLD_LONG_TERM
+  SELL_ON_SELL_SIGNAL
+  RECOMMENDATION_HISTORICAL_EVAL
 }
 
 model Car {
@@ -119,6 +205,14 @@ model Car {
   recommendationResults RecommendationResult[]
   behaviorMetricsDaily    CarBehaviorMetricsDaily[]
   liquidityStatsSnapshots CarLiquidityStats[]
+  marketInsights          MarketInsight[]
+  marketAlerts            MarketAlert[]
+  userWatchlistEntries    UserWatchlist[]
+  userNotifications       UserNotification[]
+  personalizedInsights    PersonalizedInsight[]
+  predictionEvaluations   PredictionEvaluation[]
+  investmentEvaluations   InvestmentScoreEvaluation[]
+  riskEvaluations         RiskScoreEvaluation[]
 }
 
 /// رویداد رفتار کاربر / مهمان (ingestion سبک)
@@ -153,6 +247,7 @@ model RecommendationSession {
 
   results RecommendationResult[]
   events  UserEvent[]
+  performance RecommendationPerformance?
 
   @@index([userId, createdAt])
 }
@@ -418,6 +513,137 @@ model SegmentMarketIndex {
   @@index([segment, snapshotDate])
 }
 
+/// بینش خودکار بازار (روزانه / اجرای job)
+model MarketInsight {
+  id           String      @id @default(cuid())
+  insightType  InsightType
+  carId        String?
+  car          Car?        @relation(fields: [carId], references: [id], onDelete: SetNull)
+  segment      String?
+  title        String
+  description  String      @db.Text
+  /// اهمیت یا قدرت سیگنال (۰–۱۰۰)
+  score        Float
+  metadata     Json?
+  snapshotDate DateTime    @db.Date
+  createdAt    DateTime    @default(now())
+
+  @@index([insightType, snapshotDate])
+  @@index([carId, snapshotDate])
+  @@index([segment, snapshotDate])
+  @@index([snapshotDate])
+}
+
+model MarketAlert {
+  id         String          @id @default(cuid())
+  alertType  MarketAlertType
+  carId      String?
+  car        Car?            @relation(fields: [carId], references: [id], onDelete: SetNull)
+  segment    String?
+  message    String          @db.Text
+  severity   AlertSeverity
+  metadata   Json?
+  createdAt  DateTime        @default(now())
+  isActive   Boolean         @default(true)
+
+  @@index([alertType, isActive])
+  @@index([carId, isActive])
+  @@index([segment, isActive])
+  @@index([createdAt])
+}
+
+/// لیست رصد کاربر (هدف قیمت، هشدارها)
+model UserWatchlist {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carId              String
+  car                Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  notes              String?
+  targetBuyPrice     Decimal? @db.Decimal(18, 0)
+  targetSellPrice    Decimal? @db.Decimal(18, 0)
+  alertOnPriceDrop   Boolean  @default(true)
+  alertOnPriceRise   Boolean  @default(false)
+  alertOnBuySignal   Boolean  @default(true)
+  alertOnSellSignal  Boolean  @default(true)
+  alertOnHighRisk    Boolean  @default(true)
+  alertOnMomentum    Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([userId, carId])
+  @@index([userId])
+  @@index([carId])
+}
+
+model UserNotification {
+  id        String               @id @default(cuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      UserNotificationType
+  title     String
+  message   String               @db.Text
+  carId     String?
+  car       Car?                 @relation(fields: [carId], references: [id], onDelete: SetNull)
+  segment   String?
+  metadata  Json?
+  isRead    Boolean              @default(false)
+  createdAt DateTime             @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, isRead])
+  @@index([carId])
+}
+
+model MarketReport {
+  id                   String                @id @default(cuid())
+  reportDate           DateTime              @db.Date
+  frequency            MarketReportFrequency @default(DAILY)
+  title                String
+  summary              String                @db.Text
+  marketCycle          Json
+  topRisingCars        Json
+  topFallingCars       Json
+  bestInvestments      Json
+  highestRiskCars      Json
+  fastestSellingCars   Json
+  segmentTrends        Json
+  volatilityOverview   Json
+  liquidityOverview    Json
+  metadata             Json?
+  createdAt            DateTime              @default(now())
+
+  @@unique([reportDate, frequency])
+  @@index([reportDate])
+}
+
+model PersonalizedInsight {
+  id             String                  @id @default(cuid())
+  userId         String
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insightType    PersonalizedInsightType
+  carId          String?
+  car            Car?                    @relation(fields: [carId], references: [id], onDelete: SetNull)
+  segment        String?
+  title          String
+  description    String                  @db.Text
+  score          Float
+  metadata       Json?
+  createdAt      DateTime                @default(now())
+
+  @@index([userId, createdAt])
+  @@index([insightType])
+}
+
+model ApiKey {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  name       String
+  isActive   Boolean  @default(true)
+  rateLimit  Int      @default(60)
+  createdAt  DateTime @default(now())
+}
+
 /// ترجیحات ساخت‌یافته برای موتور توصیهٔ v2 (کنار فیلدهای User)
 model UserProfile {
   id                      String   @id @default(cuid())
@@ -524,4 +750,201 @@ model UserWishlist {
   car    Car  @relation(fields: [carId], references: [id], onDelete: Cascade)
 
   @@id([userId, carId])
+}
+
+model BacktestResult {
+  id            String               @id @default(cuid())
+  strategyName  BacktestStrategyName
+  startDate     DateTime             @db.Date
+  endDate       DateTime             @db.Date
+  totalReturn   Float
+  annualReturn  Float
+  maxDrawdown   Float
+  winRate       Float
+  tradesCount   Int
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+
+  @@index([strategyName, createdAt])
+  @@index([startDate, endDate])
+}
+
+model PortfolioSimulation {
+  id              String               @id @default(cuid())
+  userId          String?
+  user            User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  strategy        BacktestStrategyName
+  startDate       DateTime             @db.Date
+  endDate         DateTime             @db.Date
+  initialCapital  Decimal              @db.Decimal(18, 2)
+  finalCapital    Decimal              @db.Decimal(18, 2)
+  totalReturn     Float
+  maxDrawdown     Float
+  metadata        Json?
+  createdAt       DateTime             @default(now())
+
+  @@index([userId, createdAt])
+  @@index([strategy])
+}
+
+model PredictionEvaluation {
+  id             String   @id @default(cuid())
+  carId          String
+  car            Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  predictionDate DateTime @db.Date
+  targetDate     DateTime @db.Date
+  horizonDays    Int
+  predictedPrice Decimal  @db.Decimal(18, 0)
+  actualPrice    Decimal? @db.Decimal(18, 0)
+  error          Float?
+  absError       Float?
+  pctError       Float?
+  modelVersion   String
+  createdAt      DateTime @default(now())
+
+  @@unique([carId, predictionDate, horizonDays, modelVersion])
+  @@index([carId])
+  @@index([targetDate])
+  @@index([modelVersion])
+}
+
+model InvestmentScoreEvaluation {
+  id               String   @id @default(cuid())
+  carId            String
+  car              Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  snapshotDate     DateTime @db.Date
+  investmentScore  Float
+  return30d        Float?
+  return90d        Float?
+  return180d       Float?
+  volatility       Float?
+  drawdown         Float?
+  createdAt        DateTime @default(now())
+
+  @@unique([carId, snapshotDate])
+  @@index([snapshotDate])
+}
+
+model RiskScoreEvaluation {
+  id                 String   @id @default(cuid())
+  carId              String
+  car                Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  snapshotDate       DateTime @db.Date
+  riskScore          Float
+  futureVolatility   Float?
+  futureDrawdown     Float?
+  futureReturn       Float?
+  createdAt          DateTime @default(now())
+
+  @@unique([carId, snapshotDate])
+  @@index([snapshotDate])
+}
+
+model RecommendationPerformance {
+  id                     String                @id @default(cuid())
+  recommendationSessionId String               @unique
+  recommendationSession  RecommendationSession @relation(fields: [recommendationSessionId], references: [id], onDelete: Cascade)
+  avgReturn7d            Float?
+  avgReturn30d           Float?
+  avgReturn90d           Float?
+  clicked                Boolean               @default(false)
+  saved                  Boolean               @default(false)
+  dismissed              Boolean               @default(false)
+  createdAt              DateTime              @default(now())
+}
+
+model ScoreCalibration {
+  id           String   @id @default(cuid())
+  modelName    String
+  parameter    String
+  oldWeight    Float
+  newWeight    Float
+  methodology  String?
+  createdAt    DateTime @default(now())
+
+  @@index([modelName, createdAt])
+}
+
+/// نقطهٔ جبههٔ کارا (ریسک-بازده) برای نمودار؛ allocation آرایهٔ وزن به‌ازای خودرو
+model PortfolioFrontier {
+  id           String   @id @default(cuid())
+  risk         Float
+  return       Float
+  allocation   Json
+  methodology  String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/// آخرین توصیهٔ سبد ذخیره‌شده برای کاربر (اختیاری)
+model UserPortfolioRecommendation {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  budget    Decimal? @db.Decimal(18, 0)
+  params    Json
+  result    Json
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// سناریوی بازار برای شبیه‌سازی و استرس‌تست
+model MarketScenario {
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String   @db.Text
+  /// تغییر تجمعی هدف قیمت (درصد) در افق شبیه‌سازی
+  priceChangePct       Float
+  volatilityMultiplier Float    @default(1)
+  liquidityMultiplier  Float    @default(1)
+  demandMultiplier     Float    @default(1)
+  /// اختیاری: بازتعریف به‌ازای سگمنت، مثلاً { "suv": { "priceChangePct": -30 } }
+  segmentOverrides     Json?
+  durationDays         Int      @default(252)
+  createdAt            DateTime @default(now())
+
+  portfolioStressTests       PortfolioStressTest[]
+  strategyScenarioPerformances StrategyScenarioPerformance[]
+
+  @@index([name])
+}
+
+/// نتیجهٔ استرس‌تست روی یک سبد (آرشیو)
+model PortfolioStressTest {
+  id                  String         @id @default(cuid())
+  /// { carIds: string[], weights: number[], budget?: number }
+  portfolio           Json
+  scenarioId          String
+  scenario            MarketScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  finalReturn         Float?
+  maxDrawdown         Float
+  recoveryTimeDays    Int?
+  lossProbability     Float?
+  volatility          Float?
+  worstCase           Float?
+  bestCase            Float?
+  survivalProbability Float?
+  raw                 Json?
+  createdAt           DateTime       @default(now())
+
+  @@index([scenarioId, createdAt])
+}
+
+/// عملکرد استراتژی بک‌تست تحت سناریو (شوک روی مسیر تاریخی)
+model StrategyScenarioPerformance {
+  id                  String               @id @default(cuid())
+  strategyName        BacktestStrategyName
+  scenarioId          String
+  scenario            MarketScenario       @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+  finalReturn         Float?
+  maxDrawdown         Float
+  survivalProbability Float?
+  timeToRecoveryDays  Int?
+  methodology         String?
+  createdAt           DateTime             @default(now())
+
+  @@unique([strategyName, scenarioId])
+  @@index([scenarioId])
 }
