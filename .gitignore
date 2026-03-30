@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+api/node_modules/
+api/dist/
+api/coverage/
+.cursor/

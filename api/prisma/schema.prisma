@@ -1,0 +1,527 @@
+// Mashinchi — Car Decision Assistant (Iran market)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum UsageType {
+  CITY
+  FAMILY
+  TRIP
+  SPORT
+  OFFROAD
+  WORK_RIDEHAIL
+  INVESTMENT
+}
+
+enum ListingCondition {
+  NEW
+  USED
+  EITHER
+}
+
+enum UserEventType {
+  PAGE_VIEW
+  CAR_DETAIL_VIEW
+  RECOMMENDATION_VIEW
+  RECOMMENDATION_CLICK
+  RECOMMENDATION_DISMISS
+  WISHLIST_ADD
+  WISHLIST_REMOVE
+  COMPARE_ADD
+  MARKET_SIGNAL_VIEW
+  CONTACT_SELLER_CLICK
+  FILTER_APPLY
+  SEARCH
+  PROFILE_UPDATE
+}
+
+enum RecommendationSource {
+  MANUAL
+  PROFILE_BASED
+  SCENARIO_BASED
+  API
+  SYSTEM
+}
+
+model User {
+  id                String            @id @default(cuid())
+  name              String?
+  budget            Decimal?          @db.Decimal(18, 0)
+  riskLevel         RiskLevel?
+  usageType         UsageType?
+  usageTags         UsageType[]       @default([])
+  listingCondition  ListingCondition?
+  holdYears         Int?
+  preferences       Json?
+  previousCarIds    String[]          @default([])
+  wizardCompletedAt DateTime?
+  createdAt         DateTime          @default(now())
+
+  wishlist UserWishlist[]
+  profile  UserProfile?
+
+  userEvents             UserEvent[]
+  recommendationSessions RecommendationSession[]
+  preferenceSignals      UserPreferenceSignal[]
+}
+
+enum ListingSource {
+  DIVAR
+  BAMA
+}
+
+enum MarketCycleType {
+  BULL
+  BEAR
+  STABLE
+}
+
+model Car {
+  id     String @id @default(cuid())
+  brand  String
+  model  String
+  year   Int
+  bodyType String?
+  segment  String?
+  image    String?
+  pros     String[] @default([])
+  cons     String[] @default([])
+
+  specs          CarSpecs?
+  marketData     CarMarketData?
+  scores         CarScores?
+  ownershipCost  OwnershipCost?
+  pricePrediction PricePrediction?
+  reviewsRaw     CarReviewsRaw[]
+  featureScores  CarFeatureScores[]
+  priceHistory   PriceHistory[]
+  listings       CarListing[]
+  aliases        CarAlias[]
+
+  wishlistedBy UserWishlist[]
+
+  comparisonsAsA Comparison[] @relation("ComparisonCarA")
+  comparisonsAsB Comparison[] @relation("ComparisonCarB")
+
+  userEvents              UserEvent[]
+  recommendationResults RecommendationResult[]
+  behaviorMetricsDaily    CarBehaviorMetricsDaily[]
+  liquidityStatsSnapshots CarLiquidityStats[]
+}
+
+/// رویداد رفتار کاربر / مهمان (ingestion سبک)
+model UserEvent {
+  id                      String         @id @default(cuid())
+  userId                  String?
+  user                    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId               String
+  eventType               UserEventType
+  carId                   String?
+  car                     Car?           @relation(fields: [carId], references: [id], onDelete: SetNull)
+  recommendationSessionId String?
+  recommendationSession   RecommendationSession? @relation(fields: [recommendationSessionId], references: [id], onDelete: SetNull)
+  metadata                Json?
+  createdAt               DateTime       @default(now())
+
+  @@index([userId, createdAt])
+  @@index([carId, createdAt])
+  @@index([recommendationSessionId, createdAt])
+}
+
+/// یک بار فراخوانی موتور توصیه (غیرقابل ویرایش پس از ایجاد)
+model RecommendationSession {
+  id             String                 @id @default(cuid())
+  userId         String?
+  user           User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId      String
+  source         RecommendationSource
+  requestPayload Json
+  modelVersion   String
+  createdAt      DateTime               @default(now())
+
+  results RecommendationResult[]
+  events  UserEvent[]
+
+  @@index([userId, createdAt])
+}
+
+model RecommendationResult {
+  id                      String                @id @default(cuid())
+  recommendationSessionId String
+  recommendationSession   RecommendationSession @relation(fields: [recommendationSessionId], references: [id], onDelete: Cascade)
+  carId                   String
+  car                     Car                   @relation(fields: [carId], references: [id], onDelete: Cascade)
+  rank                    Int
+  finalScore              Float
+  explanation             Json?
+  wasClicked              Boolean               @default(false)
+  wasSaved                Boolean               @default(false)
+  wasDismissed            Boolean               @default(false)
+  createdAt               DateTime              @default(now())
+
+  @@unique([recommendationSessionId, carId])
+  @@index([recommendationSessionId, rank])
+}
+
+/// متریک رفتار روزانه به‌ازای خودرو (آمادهٔ یادگیری)
+model CarBehaviorMetricsDaily {
+  id                       String   @id @default(cuid())
+  carId                    String
+  car                      Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  snapshotDate             DateTime @db.Date
+  detailViews              Int      @default(0)
+  recommendationViews      Int      @default(0)
+  recommendationClicks     Int      @default(0)
+  recommendationDismisses  Int      @default(0)
+  wishlistAdds             Int      @default(0)
+  compareAdds              Int      @default(0)
+  marketSignalViews        Int      @default(0)
+  sellerClicks             Int      @default(0)
+  ctrRecommendation        Float?
+  saveRate                 Float?
+  dismissRate              Float?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([carId, snapshotDate])
+}
+
+/// سیگنال ترجیح استنباط‌شده (جدا از UserProfile صریح)
+model UserPreferenceSignal {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  signalDate        DateTime @db.Date
+  preferredSegments String[] @default([])
+  inferredWeights Json?
+  favoriteCarIds  String[] @default([])
+  confidenceScore Float?
+  methodology       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, signalDate])
+  @@index([userId, signalDate])
+}
+
+/// عبارات مترادف / الگو برای مچ کردن عنوان آگهی به Car
+model CarAlias {
+  id           String          @id @default(cuid())
+  carId        String
+  car          Car             @relation(fields: [carId], references: [id], onDelete: Cascade)
+  /// متن خام (برای نمایش در ادمین)
+  alias        String
+  /// نرمال‌شده برای تطبیق (یکتا در سطح سیستم)
+  normalized   String          @unique
+  /// محدود به منبع آگهی یا عمومی
+  sourceFilter ListingSource?
+  weight       Int             @default(0)
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+
+  @@index([carId])
+  @@index([isActive])
+}
+
+/// آگهی خام بازار (دیوار، باما و …)
+model CarListing {
+  id          String        @id @default(cuid())
+  source      ListingSource
+  /// شناسهٔ آگهی در سایت مبدأ (مثلاً token دیوار)
+  externalId  String
+  /// اگر با خودروی کاننیکال در DB مچ شد
+  carId       String?
+  car         Car?          @relation(fields: [carId], references: [id], onDelete: SetNull)
+  price       Decimal       @db.Decimal(18, 0)
+  mileageKm   Int?
+  yearModel   Int?
+  city        String?
+  title       String?
+  description String?       @db.Text
+  listingUrl  String?
+  listedAt    DateTime?
+  scrapedAt   DateTime      @default(now())
+  /// آخرین باری که آگهی در اسکرپ دیده شد (برای نرخ حذف / زمان فروش تقریبی)
+  lastSeenAt  DateTime?
+  rawPayload  Json?
+  /// پاک‌سازی داده: حذف از متریک/تجمیع
+  isExcluded       Boolean  @default(false)
+  exclusionReason  String?
+
+  @@unique([source, externalId])
+  @@index([carId])
+  @@index([source, scrapedAt])
+  @@index([listedAt])
+}
+
+model CarSpecs {
+  id              String  @id @default(cuid())
+  carId           String  @unique
+  car             Car     @relation(fields: [carId], references: [id], onDelete: Cascade)
+  engine          String?
+  horsepower      Int?
+  torque          String?
+  gearbox         String?
+  transmission    String?
+  fuelType        String?
+  fuelConsumption String?
+  acceleration    String?
+  maxSpeed        Int?
+  weight          Int?
+  trunk           Int?
+}
+
+model CarMarketData {
+  id             String   @id @default(cuid())
+  carId          String   @unique
+  car            Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  avgPrice       Decimal? @db.Decimal(18, 0)
+  minPrice       Decimal? @db.Decimal(18, 0)
+  maxPrice       Decimal? @db.Decimal(18, 0)
+  adsCount       Int      @default(0)
+  priceChange30d Decimal? @db.Decimal(8, 4)
+  priceChange1y  Decimal? @db.Decimal(8, 4)
+  liquidityScore Float?
+  /// نرخ افت قیمت تجمعی اخیر (مثلاً ۳۰ روز ، نسبت به میانگین دوره قبل)
+  depreciationRate30d Decimal? @db.Decimal(8, 4)
+  /// روند قیمت: شیب نرمال‌شده حدود ۱- تا ۱+
+  priceTrendScore     Float?
+  /// برچسب قابل‌نمایش: RISING | STABLE | FALLING
+  priceTrendLabel     String?
+  /// تقاضا: ترکیب رشد تعداد آگهی‌های تازه و حجم فعال
+  demandScore         Float?
+  /// نوسان قیمت روزانه از تاریخچه (۰=پر نوسان … 100=ثبات نسبی)
+  volatilityScore     Float?
+  /// انحراف معیار بازده‌های روزانه قیمت
+  volatilityRaw       Float?
+  /// RISING | STABLE | FALLING — روند حجم آگهی ۷ روز اخیر vs قبلی
+  popularityTrend     String?
+  popularityTrendScore Float?
+  buyScore            Float?
+  sellScore           Float?
+  /// BUY | SELL | HOLD
+  marketSignal        String?
+  /// مومنتوم قیمت از تاریخچه (نسبت)
+  priceChange7d       Decimal? @db.Decimal(8, 4)
+  priceChange90d      Decimal? @db.Decimal(8, 4)
+  momentumScore       Float?
+  listingsLast7d      Int?
+  listingsPrev7d      Int?
+  listingsLast30d     Int?
+  listingsPrev30d     Int?
+  liquidityTrendScore Float?
+  liquidityTrendLabel String?
+  volatilityTrendScore Float?
+  volatilityTrendLabel String?
+  metricsComputedAt   DateTime?
+  updatedAt      DateTime @updatedAt
+}
+
+model CarScores {
+  id               String   @id @default(cuid())
+  carId            String   @unique
+  car              Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  performanceScore Float?
+  comfortScore     Float?
+  economyScore     Float?
+  reliabilityScore Float?
+  marketScore      Float?
+  ownershipScore   Float?
+  prestigeScore    Float?
+  riskScore        Float?
+  overallScore     Float?
+  /// ترکیب حجم آگهی، تقاضا و تعداد نظرات
+  popularityScore         Float?
+  /// رضایت مالک از تحلیل احساس NLP روی ابعاد کلیدی
+  ownerSatisfactionScore  Float?
+  /// RISING | STABLE | FALLING — مقایسهٔ احساس نظرات ۹۰ روز اخیر vs ۹۰ روز قبل
+  ownerSatisfactionTrend  String?
+  ownerSatisfactionTrendScore Float?
+  /// جذابیت سرمایه‌گذاری (افت، نقدشوندگی، تقاضا، پیش‌بینی قیمت)
+  investmentScore         Float?
+  /// نسخهٔ فرمول overall (مثلاً v3-dynamic)
+  modelVersion     String?
+  updatedAt        DateTime @updatedAt
+}
+
+/// نقدشوندگی و زمان تقریبی فروش (نقطهٔ زمانی)
+model CarLiquidityStats {
+  id               String   @id @default(cuid())
+  carId            String
+  car              Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  snapshotDate     DateTime @db.Date
+  avgDaysToSell    Float?
+  medianDaysToSell Float?
+  sellThroughRate  Float?
+  createdAt        DateTime @default(now())
+
+  @@unique([carId, snapshotDate])
+  @@index([carId, snapshotDate])
+}
+
+/// چرخهٔ بازار به‌ازای سگمنت (روزانه)
+model MarketCycle {
+  id              String          @id @default(cuid())
+  segment         String
+  snapshotDate    DateTime        @db.Date
+  cycleType       MarketCycleType
+  confidenceScore Float?
+  methodology     String?
+  createdAt       DateTime        @default(now())
+
+  @@unique([segment, snapshotDate])
+  @@index([segment, snapshotDate])
+}
+
+/// پیش‌بینی قیمت از روند خطی روی تاریخچهٔ قیمت
+model PricePrediction {
+  id                 String   @id @default(cuid())
+  carId              String   @unique
+  car                Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  predictedPrice30d  Decimal? @db.Decimal(18, 0)
+  predictedPrice90d  Decimal? @db.Decimal(18, 0)
+  predictedChange30d Decimal? @db.Decimal(8, 4)
+  predictedChange90d Decimal? @db.Decimal(8, 4)
+  confidence         Float?
+  historyPointsUsed  Int?
+  methodology        String?
+  computedAt         DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+/// شاخص ترکیبی بازار به‌ازای هر سگمنت (نقطهٔ زمانی)
+model SegmentMarketIndex {
+  id                     String   @id @default(cuid())
+  segment                String
+  snapshotDate           DateTime @db.Date
+  indexValue             Float
+  avgPredictedChange30d  Float?
+  liquidityAvg           Float?
+  demandAvg              Float?
+  carCount               Int
+  methodology            String?
+  createdAt              DateTime @default(now())
+
+  @@unique([segment, snapshotDate])
+  @@index([segment, snapshotDate])
+}
+
+/// ترجیحات ساخت‌یافته برای موتور توصیهٔ v2 (کنار فیلدهای User)
+model UserProfile {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// { "performance": 1.2, "economy": 0.8, ... }
+  scoreWeights            Json?
+  preferredSegments     String[] @default([])
+  minBudget             Decimal? @db.Decimal(18, 0)
+  maxBudget             Decimal?  @db.Decimal(18, 0)
+  investmentBias          Float?
+  holdHorizonMonths       Int?
+  popularityWeight        Float?
+  ownerSatisfactionWeight Float?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+/// تخمین هزینهٔ مالکیت (مدل v2 — مقادیر تقریبی)
+model OwnershipCost {
+  id                       String   @id @default(cuid())
+  carId                    String   @unique
+  car                      Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  /// هزینه سوخت تقریبی ماهانه (تومان)
+  fuelMonthlyTomans        Decimal? @db.Decimal(18, 0)
+  /// هزینه نگهداری تقریبی سالانه (تومان)
+  maintenanceYearlyTomans  Decimal? @db.Decimal(18, 0)
+  /// نرخ افت ارزش سالانه تخمینی (نسبت، مثلاً 0.12 = 12٪)
+  depreciationAnnualRate   Decimal? @db.Decimal(8, 4)
+  methodology              String?
+  computedAt               DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model CarReviewsRaw {
+  id        String   @id @default(cuid())
+  carId     String
+  car       Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  source    String
+  text      String   @db.Text
+  fetchedAt DateTime @default(now())
+  /// شناسهٔ خارجی برای ددیاب (youtube_id، comment_id، …)
+  externalId   String?
+  title        String?
+  lang         String   @default("fa")
+  /// متادیتای خام (لینک، نویسنده، …)
+  rawMetadata  Json?
+  /// هش متن برای جلوگیری از تکرار
+  contentHash  String?
+
+  @@unique([carId, contentHash])
+  @@index([carId])
+  @@index([carId, source])
+  @@index([source, externalId])
+}
+
+model CarFeatureScores {
+  id            String  @id @default(cuid())
+  carId         String
+  car           Car     @relation(fields: [carId], references: [id], onDelete: Cascade)
+  feature       String
+  positiveCount Int     @default(0)
+  negativeCount Int     @default(0)
+  score         Float?
+
+  @@unique([carId, feature])
+  @@index([carId])
+}
+
+model Comparison {
+  id               String   @id @default(cuid())
+  carAId           String
+  carBId           String
+  carA             Car      @relation("ComparisonCarA", fields: [carAId], references: [id], onDelete: Cascade)
+  carB             Car      @relation("ComparisonCarB", fields: [carBId], references: [id], onDelete: Cascade)
+  economicWinner   String?
+  familyWinner     String?
+  sportWinner      String?
+  cityWinner       String?
+  tripWinner       String?
+  investmentWinner String?
+  createdAt        DateTime @default(now())
+
+  @@unique([carAId, carBId])
+}
+
+model PriceHistory {
+  id           String   @id @default(cuid())
+  carId        String
+  car          Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  date         DateTime @db.Date
+  price        Decimal  @db.Decimal(18, 0)
+  /// تعداد آگهی‌های تجمیع‌شده برای این روز (در صورت availability)
+  listingCount Int?
+
+  @@unique([carId, date])
+  @@index([carId, date])
+}
+
+model UserWishlist {
+  userId String
+  carId  String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  car    Car  @relation(fields: [carId], references: [id], onDelete: Cascade)
+
+  @@id([userId, carId])
+}

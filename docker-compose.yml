@@ -1,0 +1,46 @@
+# دیتابیس و کش لوکال — از ریشهٔ پروژه: docker compose up -d
+# API روی ماشین خودتان اجرا می‌شود → DATABASE_URL با host: localhost
+# اگر روزی API داخل Docker باشد → host را postgres بگذارید (نام سرویس)
+
+name: mashinchi
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mashinchi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mashinchi
+      POSTGRES_PASSWORD: mashinchi
+      POSTGRES_DB: mashinchi
+    ports:
+      - '5432:5432'
+    volumes:
+      - mashinchi_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mashinchi -d mashinchi']
+      interval: 5s
+      timeout: 5s
+      retries: 8
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: mashinchi-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - mashinchi_redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  mashinchi_pg_data:
+    name: mashinchi_pg_data
+  mashinchi_redis_data:
+    name: mashinchi_redis_data
