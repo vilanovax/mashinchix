@@ -80,6 +80,7 @@ model User {
   personalizedInsights   PersonalizedInsight[]
   portfolioSimulations    PortfolioSimulation[]
   portfolioRecommendations UserPortfolioRecommendation[]
+  decisionSnapshots      DecisionSnapshot[]
 }
 
 enum ListingSource {
@@ -91,6 +92,38 @@ enum MarketCycleType {
   BULL
   BEAR
   STABLE
+}
+
+/// خروجی موتور تصمیم — اقدام در سطح بازار
+enum DecisionMarketAction {
+  BUY
+  SELL
+  HOLD
+  WAIT
+  CAUTIOUS
+}
+
+/// خروجی موتور تصمیم — سبد کاربر
+enum DecisionPortfolioAction {
+  REBALANCE
+  HOLD
+  REDUCE_RISK
+  INCREASE_RISK
+}
+
+/// خروجی موتور تصمیم — نوع استراتژی پیشنهادی
+enum DecisionStrategyAction {
+  MOMENTUM
+  LOW_RISK
+  BALANCED
+  CASH
+  SEGMENT_ROTATION
+}
+
+enum DecisionMarketOutlook {
+  BULL
+  BEAR
+  SIDEWAYS
 }
 
 enum InsightType {
@@ -947,4 +980,32 @@ model StrategyScenarioPerformance {
 
   @@unique([strategyName, scenarioId])
   @@index([scenarioId])
+}
+
+/// اسنپ‌شات روزانهٔ تصمیم سیستم (بازار یا شخصی‌سازی‌شده با userId)
+model DecisionSnapshot {
+  id                  String               @id @default(cuid())
+  ///کلید یکتا: `market:YYYY-MM-DD` یا `user:{userId}:YYYY-MM-DD`
+  snapshotKey         String               @unique
+  snapshotDate        DateTime             @db.Date
+  userId              String?
+  user                User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  marketDecision      DecisionMarketAction
+  portfolioDecision   DecisionPortfolioAction
+  strategyDecision    DecisionStrategyAction
+  /// خلاصهٔ چرخه، مثلاً «۶۵٪ سگمنت‌ها گاوی»
+  marketCycle         String?
+  marketOutlook       DecisionMarketOutlook
+  riskLevel           RiskLevel
+  confidence          Float
+  summary             String               @db.Text
+  keyFactors          Json
+  warnings            Json
+  opportunities       Json
+  /// bestSegments، avoidSegments، bestCarsToBuy، carsToSell و متادیتا
+  details             Json?
+  createdAt           DateTime             @default(now())
+
+  @@index([snapshotDate])
+  @@index([userId, snapshotDate])
 }

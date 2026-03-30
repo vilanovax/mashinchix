@@ -19,6 +19,7 @@ import { IntelligenceDeliveryModule } from './delivery/intelligence-delivery.mod
 import { PublicModule } from './public/public.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
 import { ScenarioModule } from './scenario/scenario.module';
+import { DecisionModule } from './decision/decision.module';
 
 const bullDisabled = process.env.DISABLE_BULLMQ === 'true';
 
@@ -58,6 +59,7 @@ const queueImports = bullDisabled
     PublicModule,
     PortfolioModule,
     ScenarioModule,
+    DecisionModule,
   ],
 })
 export class AppModule {}
