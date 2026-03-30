@@ -126,6 +126,28 @@ enum DecisionMarketOutlook {
   SIDEWAYS
 }
 
+/// روابط در گراف دانش خودرو
+enum CarGraphRelationType {
+  SIMILAR
+  SUBSTITUTE
+  COMPLEMENT
+  PRICE_CORRELATED
+  LIQUIDITY_CORRELATED
+  RISK_CORRELATED
+  MOMENTUM_CORRELATED
+  SAME_SEGMENT
+  COMPETITOR
+  UPGRADE_PATH
+}
+
+/// روابط بین سگمنت‌ها در گراف بازار
+enum SegmentGraphRelationType {
+  INDEX_CORRELATED
+  MOMENTUM_ALIGNED
+  SUBSTITUTION_CLUSTER
+  FLOW_LEADER_FOLLOWER
+}
+
 enum InsightType {
   FASTEST_RISING_PRICE
   FASTEST_FALLING_PRICE
@@ -246,6 +268,10 @@ model Car {
   predictionEvaluations   PredictionEvaluation[]
   investmentEvaluations   InvestmentScoreEvaluation[]
   riskEvaluations         RiskScoreEvaluation[]
+  relationshipsFrom       CarRelationship[]      @relation("CarGraphFrom")
+  relationshipsTo         CarRelationship[]      @relation("CarGraphTo")
+  similarityScoresAsCar   CarSimilarityScore[]   @relation("SimCar")
+  similarityScoresAsPeer CarSimilarityScore[]  @relation("SimPeer")
 }
 
 /// رویداد رفتار کاربر / مهمان (ingestion سبک)
@@ -1008,4 +1034,77 @@ model DecisionSnapshot {
 
   @@index([snapshotDate])
   @@index([userId, snapshotDate])
+}
+
+/// یال گراف بین دو خودرو
+model CarRelationship {
+  id           String              @id @default(cuid())
+  carId        String
+  relatedCarId String
+  car          Car                 @relation("CarGraphFrom", fields: [carId], references: [id], onDelete: Cascade)
+  relatedCar   Car                 @relation("CarGraphTo", fields: [relatedCarId], references: [id], onDelete: Cascade)
+  relationType CarGraphRelationType
+  strength     Float
+  methodology  String?
+  createdAt    DateTime            @default(now())
+
+  @@unique([carId, relatedCarId, relationType])
+  @@index([carId])
+  @@index([relatedCarId])
+  @@index([relationType])
+}
+
+/// یال گراف بین سگمنت‌ها
+model SegmentRelationship {
+  id             String                 @id @default(cuid())
+  segment        String
+  relatedSegment String
+  relationType   SegmentGraphRelationType
+  correlation    Float
+  methodology    String?
+  createdAt      DateTime               @default(now())
+
+  @@unique([segment, relatedSegment, relationType])
+  @@index([segment])
+  @@index([relatedSegment])
+}
+
+/// امتیاز تشابه ترکیبی (۰–۱) برای جفت خودرو
+model CarSimilarityScore {
+  id              String   @id @default(cuid())
+  carId           String
+  peerCarId       String
+  car             Car      @relation("SimCar", fields: [carId], references: [id], onDelete: Cascade)
+  peer            Car      @relation("SimPeer", fields: [peerCarId], references: [id], onDelete: Cascade)
+  score           Float
+  specSim         Float?
+  priceSim        Float?
+  corrSim         Float?
+  behaviorCooccur Float?
+  ownershipSim    Float?
+  components      Json?
+  methodology     String?
+  createdAt       DateTime @default(now())
+
+  @@unique([carId, peerCarId])
+  @@index([carId])
+  @@index([peerCarId])
+}
+
+/// خروجی ذخیره‌شدهٔ بهینه‌سازی سبد
+model PortfolioOptimizationResult {
+  id                   String   @id @default(cuid())
+  methodology          String
+  carIds               String[] @default([])
+  weights              Json
+  expectedReturn       Float
+  expectedVolatility   Float
+  sharpeRatio          Float?
+  maxDrawdown          Float?
+  diversificationScore Float
+  riskContribution     Json
+  constraints          Json
+  createdAt            DateTime @default(now())
+
+  @@index([methodology, createdAt])
 }

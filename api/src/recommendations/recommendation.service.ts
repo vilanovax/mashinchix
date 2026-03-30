@@ -20,6 +20,7 @@ import {
   computeRecommendationScoreV3,
   type UserV3BehaviorState,
 } from './recommendation-v3.scoring';
+import { RecommendationGraphEnrichmentService } from '../graph/recommendation-graph.enrichment';
 
 const carInclude = {
   specs: true,
@@ -350,6 +351,7 @@ export class RecommendationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionService: RecommendationSessionService,
+    private readonly graphEnrichment: RecommendationGraphEnrichmentService,
   ) {}
 
   private serialize(car: CarRec, finalScore: number) {
@@ -966,6 +968,15 @@ export class RecommendationService {
         : base;
     });
 
+    const graph = await this.graphEnrichment.enrichV3(
+      rankedEnriched.map((r) => ({
+        id: r.car.id,
+        brand: r.car.brand,
+        model: r.car.model,
+      })),
+      budget,
+    );
+
     return {
       recommendationSessionId,
       clientSessionId,
@@ -977,6 +988,7 @@ export class RecommendationService {
       count: ranked.length,
       results,
       recommendations: results,
+      graph,
     };
   }
 }
