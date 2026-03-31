@@ -81,6 +81,7 @@ model User {
   portfolioSimulations    PortfolioSimulation[]
   portfolioRecommendations UserPortfolioRecommendation[]
   decisionSnapshots      DecisionSnapshot[]
+  triggerEvents          TriggerEvent[]
 }
 
 enum ListingSource {
@@ -198,6 +199,25 @@ enum UserNotificationType {
   WATCHLIST_UPDATE
   RECOMMENDATION
   MARKET_REPORT
+  /// رویداد از موتور تریگر هوشمند (نسخهٔ ۲ proactive)
+  TRIGGER_ENGINE
+}
+
+/// نوع تریگر در موتور هوشمندی فعال
+enum TriggerEngineType {
+  PRICE_DROP_THRESHOLD
+  PRICE_SPIKE
+  VOLATILITY_SPIKE
+  LIQUIDITY_DROP
+  DEMAND_SPIKE
+  SIGNAL_CHANGE
+  STRATEGY_CHANGE
+  PORTFOLIO_DRIFT
+  WATCHLIST_HIT
+  OPPORTUNITY_DETECTED
+  RISK_INCREASE
+  SEGMENT_ROTATION
+  MARKET_CYCLE_CHANGE
 }
 
 enum PersonalizedInsightType {
@@ -227,6 +247,51 @@ enum BacktestStrategyName {
   HOLD_LONG_TERM
   SELL_ON_SELL_SIGNAL
   RECOMMENDATION_HISTORICAL_EVAL
+}
+
+enum LearningHorizon {
+  D7
+  D30
+  D90
+}
+
+enum LearningModelFamily {
+  PREDICTION
+  INVESTMENT_SCORE
+  RISK_SCORE
+  RECOMMENDATION
+  PORTFOLIO
+  STRATEGY
+  DECISION
+  SIGNAL
+  TRIGGER
+  GRAPH
+  OPTIMIZATION
+}
+
+enum AdaptiveWeightSource {
+  MANUAL
+  LEARNING
+  ROLLBACK
+  EXPERIMENT
+}
+
+enum AdaptiveEventType {
+  WEIGHT_UPDATED
+  MODEL_SWITCHED
+  GUARDRAIL_CLAMPED
+  ROLLBACK
+  FREEZE
+  UNFREEZE
+  EXPERIMENT_STARTED
+  EXPERIMENT_COMPLETED
+}
+
+enum AdaptiveExperimentStatus {
+  DRAFT
+  RUNNING
+  COMPLETED
+  CANCELLED
 }
 
 model Car {
@@ -272,6 +337,7 @@ model Car {
   relationshipsTo         CarRelationship[]      @relation("CarGraphTo")
   similarityScoresAsCar   CarSimilarityScore[]   @relation("SimCar")
   similarityScoresAsPeer CarSimilarityScore[]  @relation("SimPeer")
+  triggerEvents          TriggerEvent[]
 }
 
 /// رویداد رفتار کاربر / مهمان (ingestion سبک)
@@ -324,6 +390,8 @@ model RecommendationResult {
   wasSaved                Boolean               @default(false)
   wasDismissed            Boolean               @default(false)
   createdAt               DateTime              @default(now())
+
+  learningOutcomes RecommendationOutcome[]
 
   @@unique([recommendationSessionId, carId])
   @@index([recommendationSessionId, rank])
@@ -647,11 +715,51 @@ model UserNotification {
   segment   String?
   metadata  Json?
   isRead    Boolean              @default(false)
+  /// اولویت نمایش و مسیریابی
+  severity  AlertSeverity        @default(MEDIUM)
+  /// کلید سرد شدن تکراری (مثلاً trigger:TYPE:carId:user:روز)
+  dedupeKey String?
   createdAt DateTime             @default(now())
 
   @@index([userId, createdAt])
   @@index([userId, isRead])
   @@index([carId])
+  @@index([userId, dedupeKey])
+}
+
+/// قوانین قابل پیکربندی برای موتور تریگر
+model TriggerRule {
+  id         String            @id @default(cuid())
+  name       String            @unique
+  type       TriggerEngineType
+  condition  Json              @default("{}")
+  threshold  Float?
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+
+  @@index([type, isActive])
+}
+
+/// رویداد تریگر (بازار یا کاربر)
+model TriggerEvent {
+  id         String            @id @default(cuid())
+  type       TriggerEngineType
+  severity   AlertSeverity
+  carId      String?
+  car        Car?              @relation(fields: [carId], references: [id], onDelete: SetNull)
+  segment    String?
+  userId     String?
+  user       User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  message    String            @db.Text
+  action     String            @db.Text
+  confidence Float?
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+
+  @@index([type, createdAt])
+  @@index([userId, createdAt])
+  @@index([carId])
+  @@index([segment])
 }
 
 model MarketReport {
@@ -1032,6 +1140,8 @@ model DecisionSnapshot {
   details             Json?
   createdAt           DateTime             @default(now())
 
+  decisionOutcomes DecisionOutcome[]
+
   @@index([snapshotDate])
   @@index([userId, snapshotDate])
 }
@@ -1107,4 +1217,206 @@ model PortfolioOptimizationResult {
   createdAt            DateTime @default(now())
 
   @@index([methodology, createdAt])
+}
+
+/// تاریخچهٔ تجمیعی کیفیت مدل / موتور (برای یادگیری و انتخاب نسخه)
+model ModelPerformanceHistory {
+  id          String              @id @default(cuid())
+  modelFamily LearningModelFamily
+  modelKey    String
+  metricName  String
+  metricValue Float
+  sampleSize  Int?
+  periodStart DateTime            @db.Date
+  periodEnd   DateTime            @db.Date
+  metadata    Json?
+  createdAt   DateTime            @default(now())
+
+  @@index([modelFamily, modelKey, createdAt])
+  @@index([periodEnd])
+}
+
+/// وزن‌های تطبیقی (امتیاز، ریسک، سبدهای پیشنهادی، …)
+model AdaptiveWeights {
+  id        String   @id @default(cuid())
+  scope     String   @unique
+  weights   Json
+  version   Int      @default(1)
+  note      String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// نسخه‌بندی رسمی حاکمیت تطبیق (تاریخچه + نسخهٔ فعال)
+model AdaptiveWeightVersion {
+  id        String             @id @default(cuid())
+  scope     String
+  version   Int
+  weights   Json
+  source    AdaptiveWeightSource @default(LEARNING)
+  notes     String?            @db.Text
+  createdAt DateTime           @default(now())
+  isActive  Boolean            @default(false)
+
+  @@unique([scope, version])
+  @@index([scope, isActive])
+  @@index([scope, createdAt])
+}
+
+model AdaptiveEvent {
+  id           String            @id @default(cuid())
+  scope        String
+  eventType    AdaptiveEventType
+  previousValue Json?
+  newValue     Json?
+  reason       String?           @db.Text
+  metadata     Json?
+  createdAt    DateTime          @default(now())
+
+  @@index([scope, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model AdaptiveControl {
+  scope              String   @id
+  isFrozen           Boolean  @default(false)
+  rollbackToVersion  Int?
+  notes              String?  @db.Text
+  updatedAt          DateTime @updatedAt
+}
+
+model AdaptiveExperiment {
+  id              String                   @id @default(cuid())
+  name            String
+  scope           String
+  controlVersion  Int
+  candidateVersion Int
+  trafficSplit    Float
+  successMetric   String
+  status          AdaptiveExperimentStatus @default(DRAFT)
+  createdAt       DateTime                 @default(now())
+
+  results AdaptiveExperimentResult[]
+
+  @@index([scope, status])
+}
+
+model AdaptiveExperimentResult {
+  id            String   @id @default(cuid())
+  experimentId  String
+  experiment    AdaptiveExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  metricName    String
+  controlValue  Float?
+  candidateValue Float?
+  winner        String?
+  createdAt     DateTime @default(now())
+
+  @@index([experimentId, createdAt])
+}
+
+model SignalPerformance {
+  id               String          @id @default(cuid())
+  signalKey        String
+  horizon          LearningHorizon
+  periodStart      DateTime        @db.Date
+  periodEnd        DateTime        @db.Date
+  sampleCount      Int
+  successCount     Int
+  avgForwardReturn Float?
+  winRate          Float?
+  rewardScore      Float?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+
+  @@unique([signalKey, horizon, periodStart, periodEnd])
+  @@index([signalKey, periodEnd])
+}
+
+model DecisionOutcome {
+  id                     String           @id @default(cuid())
+  decisionSnapshotId     String
+  decisionSnapshot       DecisionSnapshot @relation(fields: [decisionSnapshotId], references: [id], onDelete: Cascade)
+  horizon                LearningHorizon
+  benchmarkReturnPct     Float?
+  decisionReturnProxyPct Float?
+  success                Boolean?
+  rewardScore            Float?
+  evaluatedAt            DateTime         @default(now())
+  metadata               Json?
+
+  @@unique([decisionSnapshotId, horizon])
+  @@index([evaluatedAt])
+}
+
+model RecommendationOutcome {
+  id                     String                 @id @default(cuid())
+  recommendationResultId String
+  recommendationResult   RecommendationResult     @relation(fields: [recommendationResultId], references: [id], onDelete: Cascade)
+  modelVersion           String?
+  horizon                LearningHorizon
+  priceAtRecommendation  Decimal?               @db.Decimal(18, 0)
+  priceAfter             Decimal?               @db.Decimal(18, 0)
+  returnPct              Float?
+  rewardScore            Float?
+  evaluatedAt            DateTime               @default(now())
+  metadata               Json?
+
+  @@unique([recommendationResultId, horizon])
+  @@index([modelVersion, horizon])
+  @@index([evaluatedAt])
+}
+
+model PortfolioOutcome {
+  id                 String          @id @default(cuid())
+  userId             String?
+  referenceKind      String
+  referenceId        String
+  horizon            LearningHorizon
+  returnPct          Float?
+  benchmarkReturnPct Float?
+  rewardScore        Float?
+  evaluatedAt        DateTime        @default(now())
+  metadata           Json?
+
+  @@unique([referenceKind, referenceId, horizon])
+  @@index([userId, evaluatedAt])
+}
+
+model StrategyOutcome {
+  id             String               @id @default(cuid())
+  strategyName   BacktestStrategyName
+  periodStart    DateTime             @db.Date
+  periodEnd      DateTime             @db.Date
+  totalReturn    Float?
+  annualReturn   Float?
+  maxDrawdown    Float?
+  vsMedianPeer   Float?
+  rankAmongPeers Int?
+  rewardScore    Float?
+  sampleTrades   Int?
+  metadata       Json?
+  createdAt      DateTime             @default(now())
+
+  @@unique([strategyName, periodEnd])
+  @@index([periodEnd])
+}
+
+/// اسنپ‌شات روزانهٔ لایهٔ یکپارچهٔ هوش (تلفیق خروجی موتورها)
+model IntelligenceSnapshot {
+  id             String   @id @default(cuid())
+  /// یکتای روزانه، مثلاً `global:2026-03-30`
+  snapshotKey    String   @unique
+  snapshotDate   DateTime @db.Date
+  marketOverview Json
+  riskOverview   Json
+  opportunities  Json
+  alerts         Json
+  decision       Json
+  bestCars       Json
+  bestPortfolio  Json
+  bestStrategy   String?
+  briefing       String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  @@index([snapshotDate])
 }

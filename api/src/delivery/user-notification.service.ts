@@ -1,5 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, UserNotificationType } from '@prisma/client';
+import {
+  AlertSeverity,
+  Prisma,
+  UserNotificationType,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { toNumber } from '../common/decimal.util';
 
@@ -53,10 +57,14 @@ export class UserNotificationService {
       carId?: string;
       segment?: string;
       metadata?: Prisma.InputJsonValue;
+      severity?: AlertSeverity;
+      dedupeKey?: string;
     }) => {
       const k = `${input.userId}:${input.type}:${input.carId ?? ''}`;
       if (batchKey.has(k)) return;
       batchKey.add(k);
+      const dedupeKey =
+        input.dedupeKey ?? `wl:${input.userId}:${input.type}:${input.carId ?? ''}`;
       rows.push({
         userId: input.userId,
         type: input.type,
@@ -66,6 +74,8 @@ export class UserNotificationService {
         segment: input.segment,
         metadata: input.metadata ?? Prisma.JsonNull,
         isRead: false,
+        severity: input.severity ?? AlertSeverity.MEDIUM,
+        dedupeKey,
       });
     };
 
@@ -256,6 +266,8 @@ export class UserNotificationService {
         message: report.summary.slice(0, 900),
         metadata: { reportId: report.id, reportDate: report.reportDate } as Prisma.InputJsonValue,
         isRead: false,
+        severity: AlertSeverity.LOW,
+        dedupeKey: `mrpt:${userId}:${report.reportDate.toISOString().slice(0, 10)}`,
       });
     }
 
@@ -264,5 +276,93 @@ export class UserNotificationService {
     }
     this.logger.log(`Market report notifications: ${batch.length}`);
     return { created: batch.length };
+  }
+
+  /** ایجاد نوتیفیکیشن با دورهٔ سرد شدن و جلوگیری از اسپم */
+  async createWithCooldown(input: {
+    userId: string;
+    type: UserNotificationType;
+    title: string;
+    message: string;
+    carId?: string;
+    segment?: string;
+    metadata?: Prisma.InputJsonValue;
+    severity?: AlertSeverity;
+    dedupeKey?: string;
+    cooldownHours?: number;
+  }): Promise<{ created: boolean }> {
+    const hours = input.cooldownHours ?? DEDUP_HOURS;
+    const since = subHours(new Date(), hours);
+    const dedupeKey =
+      input.dedupeKey ??
+      `cd:${input.userId}:${input.type}:${input.carId ?? ''}`;
+
+    const existing = await this.prisma.userNotification.findFirst({
+      where: {
+        userId: input.userId,
+        dedupeKey,
+        createdAt: { gte: since },
+      },
+    });
+    if (existing) return { created: false };
+
+    await this.prisma.userNotification.create({
+      data: {
+        userId: input.userId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        carId: input.carId,
+        segment: input.segment,
+        metadata: input.metadata ?? Prisma.JsonNull,
+        isRead: false,
+        severity: input.severity ?? AlertSeverity.MEDIUM,
+        dedupeKey,
+      },
+    });
+    return { created: true };
+  }
+
+  /** مرتب‌سازی بر اساس شدت سپس تازگی */
+  async listPrioritizedForUser(userId: string, limit = 40) {
+    const take = Math.min(Math.max(limit, 5), 150);
+    const rows = await this.prisma.userNotification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: take * 2,
+      include: {
+        car: {
+          select: { id: true, brand: true, model: true, year: true, segment: true },
+        },
+      },
+    });
+    const rank: Record<AlertSeverity, number> = {
+      HIGH: 0,
+      MEDIUM: 1,
+      LOW: 2,
+    };
+    rows.sort(
+      (a, b) =>
+        rank[a.severity] - rank[b.severity] ||
+        b.createdAt.getTime() - a.createdAt.getTime(),
+    );
+    return rows.slice(0, take);
+  }
+
+  /** گروه‌بندی ساده بر اساس نوع برای UI */
+  async listGroupedByTypeForUser(userId: string, limitPerType = 18) {
+    const cap = Math.min(Math.max(limitPerType, 3), 40);
+    const rows = await this.prisma.userNotification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    const byType = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const arr = byType.get(r.type) ?? [];
+      if (arr.length < cap) arr.push(r);
+      byType.set(r.type, arr);
+    }
+    return Object.fromEntries(byType);
   }
 }

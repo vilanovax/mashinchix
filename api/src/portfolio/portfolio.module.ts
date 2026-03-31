@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
+import { LearningModule } from '../learning/learning.module';
 import { PortfolioRecommendationService } from './portfolio-recommendation.service';
 import { StrategyAdvisorService } from './strategy-advisor.service';
 import { PortfolioAnalyticsService } from './portfolio-analytics.service';
@@ -10,7 +11,7 @@ import { PortfolioOptimizationService } from './portfolio-optimization.service';
 import { PortfolioRebalancingService } from './portfolio-rebalancing.service';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, LearningModule],
   controllers: [
     PortfolioController,
     PortfolioAnalyticsController,

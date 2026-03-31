@@ -13,7 +13,11 @@ import {
   randomSimplexWeights,
   riskContributions,
 } from './opt/portfolio-opt-math.util';
-import type { OptimizationMethodology } from './dto/portfolio-optimize.dto';
+import {
+  OPT_METHODOLOGIES,
+  type OptimizationMethodology,
+} from './dto/portfolio-optimize.dto';
+import { AdaptiveWeightService } from '../learning/adaptive-weight.service';
 
 const KG = 'kg-v1';
 
@@ -44,12 +48,27 @@ export type OptimizationOutput = {
 export class PortfolioOptimizationService {
   private readonly logger = new Logger(PortfolioOptimizationService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adaptive: AdaptiveWeightService,
+  ) {}
+
+  private async resolveMethodology(
+    explicit?: OptimizationMethodology,
+  ): Promise<OptimizationMethodology> {
+    if (explicit) return explicit;
+    const sel = await this.adaptive.getModelSelectionPayload();
+    const m = sel.portfolioOptimizationMethod as string | undefined;
+    if (m && (OPT_METHODOLOGIES as readonly string[]).includes(m)) {
+      return m as OptimizationMethodology;
+    }
+    return 'MAX_SHARPE';
+  }
 
   async optimize(input: {
     carIds?: string[];
     budget: number;
-    methodology: OptimizationMethodology;
+    methodology?: OptimizationMethodology;
     maxWeightPerCar?: number;
     maxWeightPerSegment?: number;
     minLiquidity?: number;
@@ -59,6 +78,8 @@ export class PortfolioOptimizationService {
     useHistoricalMaxDrawdown?: boolean;
     persist?: boolean;
   }): Promise<OptimizationOutput & { savedId?: string | null }> {
+    const methodology = await this.resolveMethodology(input.methodology);
+
     const maxCar =
       input.maxWeightPerCar ??
       (input.riskTolerance === 'LOW' ? 0.28 : input.riskTolerance === 'HIGH' ? 0.42 : 0.35);
@@ -85,13 +106,13 @@ export class PortfolioOptimizationService {
     const corr = await this.buildCorrelationMatrix(carIds, segments);
 
     let muUse = [...mu];
-    if (input.methodology === 'ROBUST') {
+    if (methodology === 'ROBUST') {
       const shock = input.riskTolerance === 'LOW' ? 0.22 : 0.12;
       muUse = mu.map((m) => m * (1 - shock));
     }
 
     let w: number[];
-    switch (input.methodology) {
+    switch (methodology) {
       case 'RISK_PARITY':
         w = this.riskParityWeights(sigma);
         break;
@@ -153,7 +174,7 @@ export class PortfolioOptimizationService {
     }
 
     const out: OptimizationOutput = {
-      methodology: input.methodology,
+      methodology,
       carIds,
       weights: w,
       weightMap: Object.fromEntries(carIds.map((id, i) => [id, w[i]!])),
@@ -178,7 +199,7 @@ export class PortfolioOptimizationService {
     if (input.persist) {
       const row = await this.prisma.portfolioOptimizationResult.create({
         data: {
-          methodology: input.methodology,
+          methodology,
           carIds,
           weights: out.weightMap as unknown as Prisma.InputJsonValue,
           expectedReturn: expRet,

@@ -14,6 +14,10 @@ import { StrategyAdvisorService } from '../portfolio/strategy-advisor.service';
 import { AdvisorExplanationService } from './advisor-explanation.service';
 import { computeDecisionConfidence } from './decision-confidence.util';
 import type { DecisionCarHint, DecisionSummaryPayload } from './decision.types';
+import {
+  AdaptiveWeightService,
+  SCOPE_DECISION_CONFIDENCE,
+} from '../learning/adaptive-weight.service';
 
 function utcDateOnly(d: Date): Date {
   const x = new Date(d);
@@ -49,6 +53,7 @@ export class DecisionEngineService {
     private readonly prisma: PrismaService,
     private readonly strategyAdvisor: StrategyAdvisorService,
     private readonly advisorText: AdvisorExplanationService,
+    private readonly adaptive: AdaptiveWeightService,
   ) {}
 
   async generateDecisionSummary(
@@ -220,15 +225,19 @@ export class DecisionEngineService {
     const mapeApprox = predErr._avg.pctError != null
       ? Math.abs(Number(predErr._avg.pctError))
       : null;
-    const confidenceScore = computeDecisionConfidence({
-      mapeApprox,
-      bullShare,
-      avgVolatilityScore: volAvg != null ? Number(volAvg) : null,
-      buySignalRatio: buyRatio,
-      bearShare,
-      avgMomentum: avgMom,
-      stressMaxDd: crashStress?.maxDrawdown ?? null,
-    });
+    const dcWeights = await this.adaptive.getWeights(SCOPE_DECISION_CONFIDENCE);
+    const confidenceScore = computeDecisionConfidence(
+      {
+        mapeApprox,
+        bullShare,
+        avgVolatilityScore: volAvg != null ? Number(volAvg) : null,
+        buySignalRatio: buyRatio,
+        bearShare,
+        avgMomentum: avgMom,
+        stressMaxDd: crashStress?.maxDrawdown ?? null,
+      },
+      dcWeights,
+    );
 
     let riskLevel: RiskLevel = RiskLevel.MEDIUM;
     if (

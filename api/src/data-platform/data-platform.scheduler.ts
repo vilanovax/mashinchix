@@ -54,9 +54,12 @@ export class DataPlatformScheduler {
     const delayUserNotifications =
       this.config.get<number>('DATA_JOB_USER_NOTIFICATIONS_DELAY_MS') ??
       delayAlerts + 60_000;
+    const delayTriggerEngine =
+      this.config.get<number>('DATA_JOB_TRIGGER_ENGINE_DELAY_MS') ??
+      delayUserNotifications + 45_000;
     const delayPersonalized =
       this.config.get<number>('DATA_JOB_PERSONALIZED_INSIGHTS_DELAY_MS') ??
-      delayUserNotifications + 60_000;
+      delayTriggerEngine + 60_000;
     const delayMarketReports =
       this.config.get<number>('DATA_JOB_MARKET_REPORTS_DELAY_MS') ??
       delayPersonalized + 60_000;
@@ -69,6 +72,9 @@ export class DataPlatformScheduler {
     const delayModelEvaluation =
       this.config.get<number>('DATA_JOB_MODEL_EVALUATION_DELAY_MS') ??
       delayPreferenceSignals + 180_000;
+    const delayLearning =
+      this.config.get<number>('DATA_JOB_LEARNING_DELAY_MS') ??
+      delayModelEvaluation + 90_000;
 
     await this.queue.add('scrape-divar', {}, { removeOnComplete: 50 });
     await this.queue.add(
@@ -127,6 +133,11 @@ export class DataPlatformScheduler {
       { delay: delayUserNotifications, removeOnComplete: 50 },
     );
     await this.queue.add(
+      'evaluate-trigger-engine',
+      {},
+      { delay: delayTriggerEngine, removeOnComplete: 50 },
+    );
+    await this.queue.add(
       'generate-personalized-insights',
       {},
       { delay: delayPersonalized, removeOnComplete: 50 },
@@ -151,9 +162,14 @@ export class DataPlatformScheduler {
       {},
       { delay: delayModelEvaluation, removeOnComplete: 20 },
     );
+    await this.queue.add(
+      'recompute-learning',
+      {},
+      { delay: delayLearning, removeOnComplete: 15 },
+    );
 
     this.logger.log(
-      `Enqueued pipeline: clean +${delayClean}ms, aggregate +${delayAgg}ms, metrics +${delayMetrics}ms, predictions +${delayPredictions}ms, liquidity +${delayLiquidityStats}ms, cycle +${delayMarketCycle}ms, scores +${delayScores}ms, buySell +${delayBuySell}ms, insights +${delayInsights}ms, alerts +${delayAlerts}ms, userNotif +${delayUserNotifications}ms, personalized +${delayPersonalized}ms, reports +${delayMarketReports}ms, behavior +${delayBehavior}ms, prefs +${delayPreferenceSignals}ms, modelEval +${delayModelEvaluation}ms`,
+      `Enqueued pipeline: clean +${delayClean}ms, aggregate +${delayAgg}ms, metrics +${delayMetrics}ms, predictions +${delayPredictions}ms, liquidity +${delayLiquidityStats}ms, cycle +${delayMarketCycle}ms, scores +${delayScores}ms, buySell +${delayBuySell}ms, insights +${delayInsights}ms, alerts +${delayAlerts}ms, userNotif +${delayUserNotifications}ms, triggers +${delayTriggerEngine}ms, personalized +${delayPersonalized}ms, reports +${delayMarketReports}ms, behavior +${delayBehavior}ms, prefs +${delayPreferenceSignals}ms, modelEval +${delayModelEvaluation}ms, learning +${delayLearning}ms`,
     );
   }
 }

@@ -10,6 +10,7 @@ import type {
   UserProfile,
 } from '@prisma/client';
 import { toNumber } from '../common/decimal.util';
+import { DEFAULT_RECOMMENDATION_BLEND as RECOMMENDATION_BLEND_DEFAULTS } from '../adaptive/adaptive.constants';
 
 const N = (v: number | null | undefined, d = 50) => v ?? d;
 
@@ -264,9 +265,37 @@ export type V3ScoreBreakdown = {
   personalizationScore: number;
   investmentNorm: number;
   riskPenalty: number;
+  momentumAdj: number;
+  liquidityAdj: number;
   finalPreClamp: number;
   finalScore: number;
 };
+
+/** وزن‌های ترکیب نهایی توصیه (تطبیقی از Learning Engine) */
+export type RecommendationBlendWeights = {
+  baseScore: number;
+  marketScore: number;
+  behaviorScore: number;
+  personalizationScore: number;
+  investmentScore: number;
+  riskPenalty: number;
+  momentum: number;
+  liquidity: number;
+};
+
+function mergeRecommendationBlend(
+  raw?: Partial<Record<string, number>>,
+): RecommendationBlendWeights {
+  const m = { ...RECOMMENDATION_BLEND_DEFAULTS } as RecommendationBlendWeights;
+  if (!raw) return m;
+  for (const k of Object.keys(m) as (keyof RecommendationBlendWeights)[]) {
+    const v = raw[k];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+      (m as Record<string, number>)[k] = v;
+    }
+  }
+  return m;
+}
 
 /** ترکیب نهایی v3 (همهٔ اجزا ۰–۱۰۰) */
 export function computeRecommendationScoreV3(input: {
@@ -276,6 +305,8 @@ export function computeRecommendationScoreV3(input: {
   behaviorMetrics: CarBehaviorMetricsDaily | null | undefined;
   behaviorState: UserV3BehaviorState;
   dtoWeights?: Partial<Record<BaseKey, number>>;
+  /** وزن‌های لایهٔ ترکیب از AdaptiveWeights scope recommendation_blend */
+  recommendationBlend?: Partial<Record<string, number>>;
 }): V3ScoreBreakdown {
   const { car, profile, signal, behaviorMetrics, behaviorState, dtoWeights } =
     input;
@@ -306,15 +337,36 @@ export function computeRecommendationScoreV3(input: {
     behavior: behaviorState,
   });
   const investmentNorm = toUnit100(car.scores?.investmentScore);
-  const riskPenalty = (N(car.scores?.riskScore, 50) / 100) * 16;
+  const riskPenaltyBase = (N(car.scores?.riskScore, 50) / 100) * 16;
+
+  const blend = mergeRecommendationBlend(input.recommendationBlend);
+  const momN = toUnit100(car.marketData?.momentumScore);
+  const liqN = toUnit100(car.marketData?.liquidityScore);
+  const momentumAdj = blend.momentum * momN * 0.1;
+  const liquidityAdj = blend.liquidity * liqN * 0.1;
+
+  const sumMain =
+    blend.baseScore +
+    blend.marketScore +
+    blend.behaviorScore +
+    blend.personalizationScore +
+    blend.investmentScore;
+  const invSum = sumMain > 1e-9 ? sumMain : 1;
+  const nb = blend.baseScore / invSum;
+  const nm = blend.marketScore / invSum;
+  const nbe = blend.behaviorScore / invSum;
+  const np = blend.personalizationScore / invSum;
+  const ni = blend.investmentScore / invSum;
 
   const finalPreClamp =
-    0.4 * baseScore +
-    0.2 * marketScore +
-    0.15 * behaviorScore +
-    0.15 * personalizationScore +
-    0.1 * investmentNorm -
-    riskPenalty;
+    nb * baseScore +
+    nm * marketScore +
+    nbe * behaviorScore +
+    np * personalizationScore +
+    ni * investmentNorm +
+    momentumAdj +
+    liquidityAdj -
+    riskPenaltyBase * blend.riskPenalty;
 
   return {
     baseScore,
@@ -322,7 +374,9 @@ export function computeRecommendationScoreV3(input: {
     behaviorScore,
     personalizationScore,
     investmentNorm,
-    riskPenalty,
+    riskPenalty: riskPenaltyBase * blend.riskPenalty,
+    momentumAdj,
+    liquidityAdj,
     finalPreClamp,
     finalScore: clamp(finalPreClamp, 0, 100),
   };

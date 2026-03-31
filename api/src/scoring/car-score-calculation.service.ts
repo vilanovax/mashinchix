@@ -10,6 +10,10 @@ import {
 } from './popularity-satisfaction.util';
 import { computeInvestmentScore } from './investment-score.util';
 import { sentimentFromReviewTexts } from '../nlp/review-window-sentiment.util';
+import {
+  AdaptiveWeightService,
+  SCOPE_SCORING_BLEND,
+} from '../learning/adaptive-weight.service';
 
 /** وزن‌های پیش‌فرض overall (بدون risk که جداگانه کم می‌شود) */
 const OVERALL_WEIGHTS = {
@@ -46,10 +50,17 @@ export class CarScoreCalculationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ownershipCost: OwnershipCostService,
+    private readonly adaptive: AdaptiveWeightService,
   ) {}
 
   /** محاسبهٔ بازار + مخلوط با NLP؛ سپس ذخیره در CarScores */
-  async recomputeForCar(carId: string): Promise<void> {
+  async recomputeForCar(
+    carId: string,
+    options?: {
+      scoringBlend?: Record<string, number>;
+      modelVersionLabel?: string;
+    },
+  ): Promise<void> {
     const car = await this.prisma.car.findUnique({
       where: { id: carId },
       include: {
@@ -97,12 +108,19 @@ export class CarScoreCalculationService {
       ownerSatisfactionTrendScore,
     } = await this.computeOwnerSatisfactionTrendForCar(carId);
 
-    const riskScore = this.computeRiskScoreV2({
-      volatilityScore: md?.volatilityScore ?? null,
-      liquidityScore: liquidity,
-      depreciationRate: dep,
-      reliabilityScore,
-    });
+    const blend =
+      options?.scoringBlend ??
+      (await this.adaptive.getWeights(SCOPE_SCORING_BLEND));
+
+    const riskScore = this.computeRiskScoreV2(
+      {
+        volatilityScore: md?.volatilityScore ?? null,
+        liquidityScore: liquidity,
+        depreciationRate: dep,
+        reliabilityScore,
+      },
+      blend,
+    );
 
     const reviewsCount = await this.prisma.carReviewsRaw.count({
       where: { carId },
@@ -122,11 +140,18 @@ export class CarScoreCalculationService {
       predRow?.predictedChange30d != null
         ? toNumber(predRow.predictedChange30d)
         : null;
+    const invM = blend.investment ?? 1;
     const investmentScore = computeInvestmentScore({
       depreciationRate30d: dep,
       liquidityScore: liquidity,
       demandScore: demand,
       predictedChange30d: predCh30,
+      blend: {
+        dep: 0.25 * (blend.investment_dep ?? 1) * invM,
+        liquidity: 0.25 * (blend.investment_liq ?? 1) * invM,
+        demand: 0.25 * (blend.investment_demand ?? 1) * invM,
+        pred: 0.25 * (blend.investment_pred ?? 1) * invM,
+      },
     });
 
     const dims = {
@@ -173,21 +198,29 @@ export class CarScoreCalculationService {
       cycleAdj = -5 * (cycleRow.confidenceScore ?? 0.55);
     }
 
-    const overallScore = this.computeOverallV3({
-      performanceScore,
-      economyScore,
-      reliabilityScore,
-      ownershipScore,
-      marketScore,
-      investmentScore,
-      popularityScore,
-      ownerSatisfactionScore,
-      momentumScore: nn(md?.momentumScore, 50),
-      liquidityTrendScore: nn(md?.liquidityTrendScore, 50),
-      timeToSellScore,
-      riskScore,
-      cycleAdj,
-    });
+    const overallScore = this.computeOverallV3Adaptive(
+      {
+        performanceScore,
+        economyScore,
+        reliabilityScore,
+        ownershipScore,
+        marketScore,
+        investmentScore,
+        popularityScore,
+        ownerSatisfactionScore,
+        momentumScore: nn(md?.momentumScore, 50),
+        liquidityTrendScore: nn(md?.liquidityTrendScore, 50),
+        timeToSellScore,
+        riskScore,
+        cycleAdj,
+      },
+      blend,
+    );
+
+    const sel = await this.adaptive.getModelSelectionPayload();
+    const ver =
+      options?.modelVersionLabel ??
+      `v3-adaptive::inv=${(sel.investmentScoreFormula as string) || 'v1'}::risk=${(sel.riskModelVersion as string) || 'v2'}`;
 
     await this.prisma.carScores.upsert({
       where: { carId },
@@ -195,12 +228,12 @@ export class CarScoreCalculationService {
         carId,
         ...dims,
         overallScore,
-        modelVersion: 'v3-dynamic',
+        modelVersion: ver.slice(0, 120),
       },
       update: {
         ...dims,
         overallScore,
-        modelVersion: 'v3-dynamic',
+        modelVersion: ver.slice(0, 120),
       },
     });
 
@@ -211,8 +244,11 @@ export class CarScoreCalculationService {
 
   async recomputeAll(): Promise<{ carsUpdated: number }> {
     const cars = await this.prisma.car.findMany({ select: { id: true } });
+    const scoringBlend = await this.adaptive.getWeights(SCOPE_SCORING_BLEND);
+    const sel = await this.adaptive.getModelSelectionPayload();
+    const modelVersionLabel = `v3-adaptive::inv=${(sel.investmentScoreFormula as string) || 'v1'}::risk=${(sel.riskModelVersion as string) || 'v2'}`;
     for (const c of cars) {
-      await this.recomputeForCar(c.id);
+      await this.recomputeForCar(c.id, { scoringBlend, modelVersionLabel });
     }
     this.logger.log(`CarScores recomputed for ${cars.length} cars`);
     return { carsUpdated: cars.length };
@@ -249,12 +285,15 @@ export class CarScoreCalculationService {
       nlpDims.performance,
       car.specs?.horsepower,
     );
-    const risk = this.computeRiskScoreV2({
-      volatilityScore: md?.volatilityScore ?? null,
-      liquidityScore: liquidity,
-      depreciationRate: dep,
-      reliabilityScore: nn(nlpDims.reliability, 55),
-    });
+    const risk = this.computeRiskScoreV2(
+      {
+        volatilityScore: md?.volatilityScore ?? null,
+        liquidityScore: liquidity,
+        depreciationRate: dep,
+        reliabilityScore: nn(nlpDims.reliability, 55),
+      },
+      await this.adaptive.getWeights(SCOPE_SCORING_BLEND),
+    );
 
     const persisted = car.scores;
 
@@ -374,21 +413,35 @@ export class CarScoreCalculationService {
   /**
    * ریسک v2: نوسان (معکوس)، افت قیمت، نقدشوندگی (معکوس)، اطمینان فنی از NLP (معکوس).
    */
-  private computeRiskScoreV2(input: {
-    volatilityScore: number | null;
-    liquidityScore: number | null;
-    depreciationRate: number | null;
-    reliabilityScore: number;
-  }): number {
+  private computeRiskScoreV2(
+    input: {
+      volatilityScore: number | null;
+      liquidityScore: number | null;
+      depreciationRate: number | null;
+      reliabilityScore: number;
+    },
+    blend: Record<string, number>,
+  ): number {
     const vol = input.volatilityScore ?? 50;
     const liq = input.liquidityScore ?? 50;
     const rel = input.reliabilityScore;
     const depN = riskNormalizeDepreciation(input.depreciationRate);
+    let cV = 0.35 * (blend.risk_vol ?? 1);
+    let cD = 0.25 * (blend.risk_dep ?? 1);
+    let cL = 0.2 * (blend.risk_liq ?? 1);
+    let cR = 0.2 * (blend.risk_rel ?? 1);
+    const s = cV + cD + cL + cR;
+    if (s > 1e-9) {
+      cV /= s;
+      cD /= s;
+      cL /= s;
+      cR /= s;
+    }
     const raw =
-      0.35 * (100 - vol) +
-      0.25 * depN +
-      0.2 * (100 - liq) +
-      0.2 * (100 - rel);
+      cV * (100 - vol) +
+      cD * depN +
+      cL * (100 - liq) +
+      cR * (100 - rel);
     return Math.round(clamp(raw, 0, 100) * 10) / 10;
   }
 
@@ -461,36 +514,54 @@ export class CarScoreCalculationService {
     return Math.round(clamp(sum, 0, 100) * 10) / 10;
   }
 
-  /** overallScore پویا: مومنتوم، ترند نقدشوندگی، زمان فروش، چرخهٔ بازار */
-  private computeOverallV3(d: {
-    performanceScore: number;
-    economyScore: number;
-    reliabilityScore: number;
-    ownershipScore: number;
-    marketScore: number;
-    investmentScore: number;
-    popularityScore: number;
-    ownerSatisfactionScore: number;
-    momentumScore: number;
-    liquidityTrendScore: number;
-    timeToSellScore: number;
-    riskScore: number;
-    cycleAdj: number;
-  }): number {
-    let sum =
-      0.2 * d.performanceScore +
-      0.15 * d.economyScore +
-      0.15 * d.reliabilityScore +
-      0.1 * d.ownershipScore +
-      0.1 * d.marketScore +
-      0.1 * d.investmentScore +
-      0.05 * d.popularityScore +
-      0.05 * d.ownerSatisfactionScore +
-      0.05 * d.momentumScore +
-      0.03 * d.liquidityTrendScore +
-      0.02 * d.timeToSellScore;
+  /** overallScore پویا با ضرایب تطبیقی از scoring_blend */
+  private computeOverallV3Adaptive(
+    d: {
+      performanceScore: number;
+      economyScore: number;
+      reliabilityScore: number;
+      ownershipScore: number;
+      marketScore: number;
+      investmentScore: number;
+      popularityScore: number;
+      ownerSatisfactionScore: number;
+      momentumScore: number;
+      liquidityTrendScore: number;
+      timeToSellScore: number;
+      riskScore: number;
+      cycleAdj: number;
+    },
+    blend: Record<string, number>,
+  ): number {
+    const rows: Array<{
+      val: number;
+      base: number;
+      key: keyof typeof blend | string;
+    }> = [
+      { val: d.performanceScore, base: 0.2, key: 'performance' },
+      { val: d.economyScore, base: 0.15, key: 'economy' },
+      { val: d.reliabilityScore, base: 0.15, key: 'reliability' },
+      { val: d.ownershipScore, base: 0.1, key: 'ownership' },
+      { val: d.marketScore, base: 0.1, key: 'market' },
+      { val: d.investmentScore, base: 0.1, key: 'investment' },
+      { val: d.popularityScore, base: 0.05, key: 'popularity' },
+      { val: d.ownerSatisfactionScore, base: 0.05, key: 'ownerSatisfaction' },
+      { val: d.momentumScore, base: 0.05, key: 'momentum' },
+      { val: d.liquidityTrendScore, base: 0.03, key: 'liquidity' },
+      { val: d.timeToSellScore, base: 0.02, key: 'time_to_sell' },
+    ];
+    let wSum = 0;
+    let acc = 0;
+    for (const r of rows) {
+      const m = (blend[r.key as string] ?? 1) as number;
+      const w = r.base * m;
+      wSum += w;
+      acc += w * r.val;
+    }
+    let sum = wSum > 1e-9 ? acc / wSum : acc;
     sum += d.cycleAdj;
-    sum -= RISK_PENALTY_OVERALL_V3 * d.riskScore;
+    sum -=
+      RISK_PENALTY_OVERALL_V3 * (blend.risk ?? 1) * d.riskScore;
     return Math.round(clamp(sum, 0, 100) * 10) / 10;
   }
 }

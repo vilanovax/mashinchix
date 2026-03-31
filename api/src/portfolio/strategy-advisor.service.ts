@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BacktestStrategyName, MarketCycleType, RiskLevel } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdaptiveWeightService } from '../learning/adaptive-weight.service';
 
 export type StrategyAdvice = {
   key: string;
@@ -30,11 +31,18 @@ export type MarketStrategyResult = {
 
 @Injectable()
 export class StrategyAdvisorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adaptive: AdaptiveWeightService,
+  ) {}
 
   async recommendStrategy(options?: {
     userId?: string;
   }): Promise<MarketStrategyResult> {
+    const modelSel = await this.adaptive.getModelSelectionPayload();
+    const preferredStrat = modelSel.strategyAdvisorStrategy as
+      | BacktestStrategyName
+      | undefined;
     const userRisk = options?.userId
       ? await this.prisma.user.findUnique({
           where: { id: options.userId },
@@ -151,6 +159,11 @@ export class StrategyAdvisorService {
 
     const scoreAdvice = (a: (typeof catalog)[number]): number => {
       let s = 0.35;
+      if (
+        preferredStrat &&
+        a.strategy === preferredStrat
+      )
+        s += 0.22;
       if (a.strategy === bestStrat && bestRet != null && bestRet > 0) s += 0.25;
       if (a.strategy === BacktestStrategyName.BUY_HIGH_MOMENTUM && avgMom != null && avgMom > 0)
         s += 0.2;

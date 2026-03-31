@@ -38,8 +38,9 @@ export class PortfolioOptimizeDto {
   @Min(1)
   budget!: number;
 
+  @IsOptional()
   @IsIn([...OPT_METHODOLOGIES])
-  methodology!: OptimizationMethodology;
+  methodology?: OptimizationMethodology;
 
   @IsOptional()
   @Type(() => Number)

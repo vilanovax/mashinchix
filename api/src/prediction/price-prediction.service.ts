@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { toNumber } from '../common/decimal.util';
 import { linearRegression, rSquared } from './price-trend.util';
+import { AdaptiveWeightService } from '../learning/adaptive-weight.service';
 
 const MIN_POINTS = 3;
 const METHODOLOGY_OK =
@@ -12,9 +13,17 @@ const METHODOLOGY_OK =
 export class PricePredictionService {
   private readonly logger = new Logger(PricePredictionService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly adaptive: AdaptiveWeightService,
+  ) {}
 
   async recomputeForCar(carId: string): Promise<void> {
+    const sel = await this.adaptive.getModelSelectionPayload();
+    const predTag =
+      (sel.predictionModelVersion as string | undefined)?.trim() || 'default';
+    const methodologyLive = `${METHODOLOGY_OK}::sel=${predTag}`;
+
     const rawRows = await this.prisma.priceHistory.findMany({
       where: { carId },
       orderBy: { date: 'asc' },
@@ -32,7 +41,7 @@ export class PricePredictionService {
           predictedChange90d: null,
           confidence: 0,
           historyPointsUsed: rawRows.length,
-          methodology: `insufficient_history_need_${MIN_POINTS}`,
+          methodology: `${methodologyLive}|insufficient_history_need_${MIN_POINTS}`,
         },
         update: {
           predictedPrice30d: null,
@@ -41,7 +50,7 @@ export class PricePredictionService {
           predictedChange90d: null,
           confidence: 0,
           historyPointsUsed: rawRows.length,
-          methodology: `insufficient_history_need_${MIN_POINTS}`,
+          methodology: `${methodologyLive}|insufficient_history_need_${MIN_POINTS}`,
         },
       });
       return;
@@ -81,7 +90,7 @@ export class PricePredictionService {
           ch90 != null ? new Prisma.Decimal(ch90) : null,
         confidence,
         historyPointsUsed: rows.length,
-        methodology: METHODOLOGY_OK,
+        methodology: methodologyLive,
       },
       update: {
         predictedPrice30d: new Prisma.Decimal(pred30),
@@ -92,7 +101,7 @@ export class PricePredictionService {
           ch90 != null ? new Prisma.Decimal(ch90) : null,
         confidence,
         historyPointsUsed: rows.length,
-        methodology: METHODOLOGY_OK,
+        methodology: methodologyLive,
       },
     });
   }

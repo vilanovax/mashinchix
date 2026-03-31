@@ -20,6 +20,8 @@ import { MarketCycleService } from './market-cycle.service';
 import { MarketInsightsService } from './market-insights.service';
 import { MarketAlertsService } from './market-alerts.service';
 import { ModelEvaluationModule } from '../model-evaluation/model-evaluation.module';
+import { TriggersModule } from '../triggers/triggers.module';
+import { LearningModule } from '../learning/learning.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { ModelEvaluationModule } from '../model-evaluation/model-evaluation.modu
     AnalyticsModule,
     IntelligenceDeliveryModule,
     ModelEvaluationModule,
+    TriggersModule,
+    LearningModule,
   ],
   controllers: [DataPlatformAdminController],
   providers: [

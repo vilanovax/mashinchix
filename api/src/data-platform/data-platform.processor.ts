@@ -20,6 +20,8 @@ import { MarketReportService } from '../analytics/market-report.service';
 import { UserNotificationService } from '../delivery/user-notification.service';
 import { PersonalizedInsightsService } from '../delivery/personalized-insights.service';
 import { ModelEvaluationBatchService } from '../model-evaluation/model-evaluation-batch.service';
+import { TriggerEngineService } from '../triggers/trigger-engine.service';
+import { LearningEngineService } from '../learning/learning-engine.service';
 
 @Processor(DATA_PLATFORM_QUEUE)
 export class DataPlatformProcessor extends WorkerHost {
@@ -44,6 +46,8 @@ export class DataPlatformProcessor extends WorkerHost {
     private readonly behaviorMetrics: BehaviorMetricsService,
     private readonly preferenceLearning: UserPreferenceLearningService,
     private readonly modelEvaluationBatch: ModelEvaluationBatchService,
+    private readonly triggerEngine: TriggerEngineService,
+    private readonly learningEngine: LearningEngineService,
   ) {
     super();
   }
@@ -93,6 +97,10 @@ export class DataPlatformProcessor extends WorkerHost {
           return await this.marketAlerts.generateAlerts();
         case 'generate-user-notifications':
           return await this.userNotifications.generateNotifications();
+        case 'evaluate-trigger-engine':
+          return await this.triggerEngine.evaluateAndPersist({
+            routeNotifications: true,
+          });
         case 'generate-personalized-insights':
           return await this.personalizedInsights.generatePersonalizedInsights();
         case 'generate-market-reports': {
@@ -114,6 +122,12 @@ export class DataPlatformProcessor extends WorkerHost {
           const asOf = asOfStr ? new Date(asOfStr) : new Date();
           return await this.modelEvaluationBatch.runAll(asOf);
         }
+        case 'recompute-learning':
+          return await this.learningEngine.recompute(
+            job.data as
+              | { skipOutcomes?: boolean; maxRecommendationRows?: number }
+              | undefined,
+          );
         default:
           throw new Error(`Unknown data-platform job: ${job.name}`);
       }

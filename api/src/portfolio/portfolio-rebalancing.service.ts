@@ -19,7 +19,7 @@ export class PortfolioRebalancingService {
   async analyze(input: {
     currentHoldings: { carId: string; weight: number }[];
     budget: number;
-    methodology: OptimizationMethodology;
+    methodology?: OptimizationMethodology;
     carIds?: string[];
     maxWeightPerCar?: number;
     maxWeightPerSegment?: number;

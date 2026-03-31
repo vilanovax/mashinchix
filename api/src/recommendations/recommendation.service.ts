@@ -21,6 +21,10 @@ import {
   type UserV3BehaviorState,
 } from './recommendation-v3.scoring';
 import { RecommendationGraphEnrichmentService } from '../graph/recommendation-graph.enrichment';
+import {
+  AdaptiveWeightService,
+  SCOPE_RECOMMENDATION_BLEND,
+} from '../learning/adaptive-weight.service';
 
 const carInclude = {
   specs: true,
@@ -352,6 +356,7 @@ export class RecommendationService {
     private readonly prisma: PrismaService,
     private readonly sessionService: RecommendationSessionService,
     private readonly graphEnrichment: RecommendationGraphEnrichmentService,
+    private readonly adaptive: AdaptiveWeightService,
   ) {}
 
   private serialize(car: CarRec, finalScore: number) {
@@ -849,6 +854,14 @@ export class RecommendationService {
       filtered.map((c) => c.id),
     );
 
+    const [recommendationBlend, modelSel] = await Promise.all([
+      this.adaptive.getWeights(SCOPE_RECOMMENDATION_BLEND),
+      this.adaptive.getModelSelectionPayload(),
+    ]);
+    const adaptiveModelVersion =
+      (modelSel.recommendationModelVersion as string | undefined)?.trim() ||
+      RECOMMENDATION_MODEL_VERSION_V3;
+
     const { w, riskW } = normalizeWeightsV2(
       dto.weights,
       user?.profile ?? null,
@@ -871,6 +884,7 @@ export class RecommendationService {
           behaviorMetrics: metricsMap.get(car.id) ?? null,
           behaviorState,
           dtoWeights: this.dtoBaseWeightsV3(dto.weights),
+          recommendationBlend,
         });
         return {
           car,
@@ -948,7 +962,7 @@ export class RecommendationService {
         clientSessionId,
         source,
         requestPayload: { ...dto, engine: 'v3', clientSessionId },
-        modelVersion: RECOMMENDATION_MODEL_VERSION_V3,
+        modelVersion: adaptiveModelVersion,
         results: rankedEnriched.map((r) => ({
           carId: r.car.id,
           rank: r.rank,
@@ -983,8 +997,12 @@ export class RecommendationService {
       engine: 'v3',
       userId: dto.userId ?? null,
       budget,
-      modelVersion: RECOMMENDATION_MODEL_VERSION_V3,
-      weightsUsed: { ...w, riskPenalty: riskW },
+      modelVersion: adaptiveModelVersion,
+      weightsUsed: {
+        ...w,
+        riskPenalty: riskW,
+        recommendationBlend,
+      },
       count: ranked.length,
       results,
       recommendations: results,
