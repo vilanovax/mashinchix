@@ -50,6 +50,12 @@ export class StrategyAdvisorService {
         })
       : null;
 
+    const behavior = options?.userId
+      ? await this.prisma.userBehaviorProfile.findUnique({
+          where: { userId: options.userId },
+        })
+      : null;
+
     const [cycles, segIdx, liqVol, predErr, backtests] = await Promise.all([
       this.prisma.marketCycle.findMany({
         orderBy: { snapshotDate: 'desc' },
@@ -185,6 +191,21 @@ export class StrategyAdvisorService {
         s += 0.2;
       if (userRisk?.riskLevel === RiskLevel.HIGH && a.strategy === BacktestStrategyName.BUY_HIGH_MOMENTUM)
         s += 0.15;
+      if (
+        behavior?.momentumPref != null &&
+        behavior.momentumPref > 0.55 &&
+        a.strategy === BacktestStrategyName.BUY_HIGH_MOMENTUM
+      ) {
+        s += 0.08 + 0.1 * (behavior.momentumPref - 0.55);
+      }
+      if (
+        behavior?.valuePref != null &&
+        behavior.valuePref > 0.52 &&
+        (a.strategy === BacktestStrategyName.BUY_LOW_RISK ||
+          a.strategy === BacktestStrategyName.BUY_TOP_INVESTMENT_SCORE)
+      ) {
+        s += 0.06 + 0.08 * (behavior.valuePref - 0.52);
+      }
       return s;
     };
 

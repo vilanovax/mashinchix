@@ -88,4 +88,8 @@ export class PortfolioOptimizeDto {
   @IsOptional()
   @IsBoolean()
   useHistoricalMaxDrawdown?: boolean;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

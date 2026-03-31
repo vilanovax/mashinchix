@@ -9,6 +9,8 @@ import { PortfolioAnalyticsController } from './portfolio-analytics.controller';
 import { PortfolioOptimizationController } from './portfolio-optimization.controller';
 import { PortfolioOptimizationService } from './portfolio-optimization.service';
 import { PortfolioRebalancingService } from './portfolio-rebalancing.service';
+import { PortfolioLedgerService } from './portfolio-ledger.service';
+import { PortfolioPerformanceService } from './portfolio-performance.service';
 
 @Module({
   imports: [PrismaModule, LearningModule],
@@ -23,6 +25,8 @@ import { PortfolioRebalancingService } from './portfolio-rebalancing.service';
     PortfolioAnalyticsService,
     PortfolioOptimizationService,
     PortfolioRebalancingService,
+    PortfolioLedgerService,
+    PortfolioPerformanceService,
   ],
   exports: [
     PortfolioRecommendationService,
@@ -30,6 +34,8 @@ import { PortfolioRebalancingService } from './portfolio-rebalancing.service';
     PortfolioAnalyticsService,
     PortfolioOptimizationService,
     PortfolioRebalancingService,
+    PortfolioLedgerService,
+    PortfolioPerformanceService,
   ],
 })
 export class PortfolioModule {}

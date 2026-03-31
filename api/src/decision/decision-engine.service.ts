@@ -253,6 +253,24 @@ export class DecisionEngineService {
     )
       riskLevel = RiskLevel.LOW;
 
+    if (userId) {
+      const bp = await this.prisma.userBehaviorProfile.findUnique({
+        where: { userId },
+      });
+      const br = bp?.riskTolerance;
+      if (br != null && br < 0.4 && riskLevel === RiskLevel.HIGH) {
+        riskLevel = RiskLevel.MEDIUM;
+      }
+      if (
+        br != null &&
+        br > 0.68 &&
+        riskLevel === RiskLevel.LOW &&
+        marketOutlook === DecisionMarketOutlook.BULL
+      ) {
+        riskLevel = RiskLevel.MEDIUM;
+      }
+    }
+
     const user = userId
       ? await this.prisma.user.findUnique({
           where: { id: userId },

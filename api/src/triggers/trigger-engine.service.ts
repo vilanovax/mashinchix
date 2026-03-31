@@ -75,6 +75,11 @@ export class TriggerEngineService {
     });
   }
 
+  /** هشدارها و تریگرهای اخیر مربوط به کاربر (Advisor / Today Action). */
+  async getUserAlerts(userId: string, limit = 40) {
+    return this.userEvents(userId, limit);
+  }
+
   async portfolioContext(userId: string) {
     const [recs, driftEvents] = await Promise.all([
       this.prisma.userPortfolioRecommendation.findMany({

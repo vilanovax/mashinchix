@@ -20,6 +20,7 @@ import { LearningController } from './learning.controller';
   exports: [
     AdaptiveModule,
     LearningEngineService,
+    LearningOutcomeService,
     AdaptiveWeightService,
     ModelSelectionService,
   ],

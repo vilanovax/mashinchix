@@ -26,6 +26,7 @@ export class PortfolioOptimizationController {
       mcSamples: dto.mcSamples,
       useHistoricalMaxDrawdown: dto.useHistoricalMaxDrawdown === true,
       persist: dto.persist === true,
+      userId: dto.userId,
     });
   }
 

@@ -24,6 +24,9 @@ import { GraphModule } from './graph/graph.module';
 import { IntelligenceModule } from './intelligence/intelligence.module';
 import { TriggersModule } from './triggers/triggers.module';
 import { LearningModule } from './learning/learning.module';
+import { ExecutionModule } from './execution/execution.module';
+import { AdvisorModule } from './advisor/advisor.module';
+import { UserBehaviorModule } from './user-behavior/user-behavior.module';
 
 const bullDisabled = process.env.DISABLE_BULLMQ === 'true';
 
@@ -68,6 +71,9 @@ const queueImports = bullDisabled
     IntelligenceModule,
     TriggersModule,
     LearningModule,
+    ExecutionModule,
+    AdvisorModule,
+    UserBehaviorModule,
   ],
 })
 export class AppModule {}

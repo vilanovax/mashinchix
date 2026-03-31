@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   DecisionMarketAction,
   LearningHorizon,
+  LearningModelFamily,
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -468,6 +469,105 @@ export class LearningOutcomeService {
 
     this.logger.log(`SignalPerformance upserted: ${upserted}`);
     return { upserted };
+  }
+
+  /**
+   * یادگیری از ExecutionResult: ExecutionOutcome، PortfolioOutcome، ModelPerformanceHistory.
+   */
+  async ingestExecutionResults(planId: string): Promise<{ outcomes: number }> {
+    const results = await this.prisma.executionResult.findMany({
+      where: { planId, status: 'EXECUTED' },
+    });
+    const periodEnd = startOfUtcDay(new Date());
+    const periodStart = subCalendarDays(periodEnd, 30);
+    let outcomes = 0;
+
+    for (const r of results) {
+      const exp = r.expectedReturn ?? 0;
+      const real = r.realizedReturn ?? 0;
+      const riskPen = (r.realizedRisk ?? 0) - (r.expectedRisk ?? 0);
+      const reward = real - exp * 0.15 - Math.max(0, riskPen) * 0.1;
+      const success = real > exp - 0.02;
+
+      await this.prisma.executionOutcome.upsert({
+        where: { executionResultId: r.id },
+        create: {
+          executionResultId: r.id,
+          horizon: LearningHorizon.D30,
+          expectedReturn: exp,
+          realizedReturn: real,
+          success,
+          rewardScore: reward,
+          riskPenalty: riskPen,
+          metadata: {
+            actionType: r.actionType,
+            planId: r.planId,
+          } as Prisma.InputJsonValue,
+        },
+        update: {
+          expectedReturn: exp,
+          realizedReturn: real,
+          success,
+          rewardScore: reward,
+          riskPenalty: riskPen,
+        },
+      });
+      outcomes += 1;
+
+      await this.prisma.portfolioOutcome.upsert({
+        where: {
+          referenceKind_referenceId_horizon: {
+            referenceKind: 'EXECUTION',
+            referenceId: r.id,
+            horizon: LearningHorizon.D30,
+          },
+        },
+        create: {
+          userId: r.userId,
+          referenceKind: 'EXECUTION',
+          referenceId: r.id,
+          horizon: LearningHorizon.D30,
+          returnPct: real,
+          benchmarkReturnPct: exp,
+          rewardScore: reward,
+          metadata: { actionType: r.actionType } as Prisma.InputJsonValue,
+        },
+        update: {
+          returnPct: real,
+          benchmarkReturnPct: exp,
+          rewardScore: reward,
+        },
+      });
+
+      const existsHist = await this.prisma.modelPerformanceHistory.findFirst({
+        where: {
+          modelFamily: LearningModelFamily.EXECUTION,
+          modelKey: r.actionType,
+          periodEnd,
+          metricName: 'realized_return_proxy',
+        },
+      });
+      if (!existsHist) {
+        await this.prisma.modelPerformanceHistory.create({
+          data: {
+            modelFamily: LearningModelFamily.EXECUTION,
+            modelKey: r.actionType,
+            metricName: 'realized_return_proxy',
+            metricValue: real,
+            sampleSize: 1,
+            periodStart,
+            periodEnd,
+            metadata: {
+              expectedReturn: exp,
+              planId,
+              executionResultId: r.id,
+            } as Prisma.InputJsonValue,
+          },
+        });
+      }
+    }
+
+    return { outcomes };
   }
 
   private parsePortfolioCars(

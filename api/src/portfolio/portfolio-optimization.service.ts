@@ -77,12 +77,30 @@ export class PortfolioOptimizationService {
     mcSamples?: number;
     useHistoricalMaxDrawdown?: boolean;
     persist?: boolean;
+    userId?: string;
   }): Promise<OptimizationOutput & { savedId?: string | null }> {
     const methodology = await this.resolveMethodology(input.methodology);
 
+    let riskTolerance = input.riskTolerance;
+    let maxPortfolioVolatility = input.maxPortfolioVolatility;
+    if (input.userId) {
+      const bp = await this.prisma.userBehaviorProfile.findUnique({
+        where: { userId: input.userId },
+      });
+      if (bp?.riskTolerance != null) {
+        const r = bp.riskTolerance;
+        if (r < 0.38) riskTolerance = 'LOW';
+        else if (r > 0.62) riskTolerance = 'HIGH';
+        else riskTolerance = 'MEDIUM';
+      }
+      if (bp?.liquidityPref != null && maxPortfolioVolatility == null) {
+        maxPortfolioVolatility = 0.36 + (1 - bp.liquidityPref) * 0.24;
+      }
+    }
+
     const maxCar =
       input.maxWeightPerCar ??
-      (input.riskTolerance === 'LOW' ? 0.28 : input.riskTolerance === 'HIGH' ? 0.42 : 0.35);
+      (riskTolerance === 'LOW' ? 0.28 : riskTolerance === 'HIGH' ? 0.42 : 0.35);
     const maxSeg = input.maxWeightPerSegment ?? 0.62;
     const minLiq = input.minLiquidity ?? 18;
     const samples = Math.min(Math.max(input.mcSamples ?? 220, 40), 800);
@@ -107,7 +125,7 @@ export class PortfolioOptimizationService {
 
     let muUse = [...mu];
     if (methodology === 'ROBUST') {
-      const shock = input.riskTolerance === 'LOW' ? 0.22 : 0.12;
+      const shock = riskTolerance === 'LOW' ? 0.22 : 0.12;
       muUse = mu.map((m) => m * (1 - shock));
     }
 
@@ -142,11 +160,11 @@ export class PortfolioOptimizationService {
     let expRet = dot(w, muUse);
     let expVol = portfolioVol(w, sigma, corr);
     if (
-      input.maxPortfolioVolatility != null &&
-      input.maxPortfolioVolatility > 0 &&
-      expVol > input.maxPortfolioVolatility
+      maxPortfolioVolatility != null &&
+      maxPortfolioVolatility > 0 &&
+      expVol > maxPortfolioVolatility
     ) {
-      const scale = input.maxPortfolioVolatility / Math.max(expVol, 1e-6);
+      const scale = maxPortfolioVolatility / Math.max(expVol, 1e-6);
       w = w.map((x) => x * scale);
       const s = w.reduce((a, b) => a + b, 0);
       if (s > 1e-8) w = w.map((x) => x / s);
@@ -190,8 +208,9 @@ export class PortfolioOptimizationService {
         maxWeightPerSegment: maxSeg,
         minLiquidity: minLiq,
         budget: input.budget,
-        riskTolerance: input.riskTolerance ?? null,
-        maxPortfolioVolatility: input.maxPortfolioVolatility ?? null,
+        riskTolerance: riskTolerance ?? null,
+        maxPortfolioVolatility: maxPortfolioVolatility ?? null,
+        behaviorUserId: input.userId ?? null,
       },
     };
 

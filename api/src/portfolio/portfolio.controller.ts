@@ -14,6 +14,8 @@ import { RecommendPortfolioDto } from './dto/portfolio-recommend.dto';
 import { PortfolioSimulateDto } from './dto/portfolio-simulate.dto';
 import { simulateBuyAndHoldWeighted } from './custom-portfolio-sim.util';
 import { PrismaService } from '../prisma/prisma.service';
+import { PortfolioPerformanceService } from './portfolio-performance.service';
+import { PortfolioLedgerService } from './portfolio-ledger.service';
 
 @Controller('portfolio')
 export class PortfolioController {
@@ -21,6 +23,8 @@ export class PortfolioController {
     private readonly recommendation: PortfolioRecommendationService,
     private readonly strategyAdvisor: StrategyAdvisorService,
     private readonly prisma: PrismaService,
+    private readonly performance: PortfolioPerformanceService,
+    private readonly ledger: PortfolioLedgerService,
   ) {}
 
   @Post('recommend')
@@ -98,5 +102,49 @@ export class PortfolioController {
       throw new NotFoundException('توصیهٔ ذخیره‌شده‌ای برای این کاربر نیست');
     }
     return row;
+  }
+
+  @Get('performance/:userId')
+  portfolioPerformance(@Param('userId') userId: string) {
+    return this.performance.getPerformance(userId);
+  }
+
+  @Get('history/:userId')
+  portfolioHistory(
+    @Param('userId') userId: string,
+    @Query('take') take?: string,
+  ) {
+    const t = take != null ? parseInt(take, 10) : 60;
+    return this.performance.getHistory(
+      userId,
+      Number.isFinite(t) ? t : 60,
+    );
+  }
+
+  @Get('positions/:userId')
+  portfolioPositions(@Param('userId') userId: string) {
+    return this.performance.getPositions(userId);
+  }
+
+  @Get('transactions/:userId')
+  portfolioTransactions(
+    @Param('userId') userId: string,
+    @Query('take') take?: string,
+  ) {
+    const t = take != null ? parseInt(take, 10) : 80;
+    return this.performance.getTransactions(
+      userId,
+      Number.isFinite(t) ? t : 80,
+    );
+  }
+
+  @Get('value/:userId')
+  portfolioValue(@Param('userId') userId: string) {
+    return this.performance.getValue(userId);
+  }
+
+  @Get('state/:userId')
+  portfolioState(@Param('userId') userId: string) {
+    return this.ledger.getPortfolioState(userId);
   }
 }

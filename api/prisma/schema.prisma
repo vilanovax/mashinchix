@@ -82,6 +82,39 @@ model User {
   portfolioRecommendations UserPortfolioRecommendation[]
   decisionSnapshots      DecisionSnapshot[]
   triggerEvents          TriggerEvent[]
+  executionPlans         ExecutionPlan[]
+  executionResults       ExecutionResult[]
+  executionApprovals     ExecutionApproval[]
+  advisorSnapshots       AdvisorSnapshot[]
+  managedPortfolios      Portfolio[]
+  userActions            UserAction[]
+  behaviorProfile        UserBehaviorProfile?
+  decisionFeedbacks      UserDecisionFeedback[]
+}
+
+/// لایهٔ محصول: نمای روزانهٔ اقدامات (Today Action / Advisor)
+model AdvisorSnapshot {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  snapshotDate     DateTime
+
+  marketState      String?
+  portfolioState   String?
+  riskState        String?
+
+  actions          Json
+  expectedImpact   Json
+  warnings         Json
+  opportunities    Json
+
+  confidence       Float?
+  summary          String?  @db.Text
+  briefing         String?  @db.Text
+
+  createdAt        DateTime @default(now())
+
+  @@index([userId, snapshotDate])
 }
 
 enum ListingSource {
@@ -267,6 +300,7 @@ enum LearningModelFamily {
   TRIGGER
   GRAPH
   OPTIMIZATION
+  EXECUTION
 }
 
 enum AdaptiveWeightSource {
@@ -1140,10 +1174,187 @@ model DecisionSnapshot {
   details             Json?
   createdAt           DateTime             @default(now())
 
-  decisionOutcomes DecisionOutcome[]
+  decisionOutcomes    DecisionOutcome[]
+  userDecisionFeedbacks UserDecisionFeedback[]
 
   @@index([snapshotDate])
   @@index([userId, snapshotDate])
+}
+
+/// رفتار و بازخورد کاربر نسبت به مشاور / اجرا / تصمیم
+model UserAction {
+  id            String           @id @default(cuid())
+  userId        String
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  actionType    String
+  planId        String?
+  plan          ExecutionPlan?   @relation(fields: [planId], references: [id], onDelete: SetNull)
+  executionId   String?
+  executionResult ExecutionResult? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  assetId       String?
+  action        String
+  value         Float?
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+
+  @@index([userId, createdAt])
+  @@index([planId])
+}
+
+/// پروفایل رفتاری تجمیعی برای شخصی‌سازی موتورها
+model UserBehaviorProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  riskTolerance       Float?
+  panicSellScore      Float?
+  holdDuration        Float?
+  diversificationPref Float?
+  liquidityPref       Float?
+  momentumPref        Float?
+  valuePref           Float?
+  confidenceTrust     Float?
+  overrideRate        Float?
+  segmentPreferences  Json?
+  strategyPreferences Json?
+  updatedAt           DateTime   @updatedAt
+}
+
+model UserDecisionFeedback {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decisionId String
+  decision   DecisionSnapshot @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  feedback   String
+  rating     Float?
+  note       String?          @db.Text
+  createdAt  DateTime         @default(now())
+
+  @@index([userId, decisionId])
+  @@index([decisionId])
+}
+
+/// پلان اقدامات پیشنهادی موتور اجرا (بدون اجرای واقعی معامله)
+model ExecutionPlan {
+  id             String    @id @default(cuid())
+  userId         String?
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  planDate       DateTime  @db.Date
+  actions        Json
+  summary        String    @db.Text
+  expectedReturn Float?
+  expectedRisk   Float?
+  confidence     Float?
+  simulation     Json?
+  createdAt      DateTime  @default(now())
+
+  simulations ExecutionSimulation[]
+  results     ExecutionResult[]
+  approvals   ExecutionApproval[]
+  userActions UserAction[]
+
+  @@index([userId, planDate])
+  @@index([planDate])
+}
+
+/// شبیه‌سازی پیش‌از اجرای پلان (Pre-Trade Risk)
+model ExecutionSimulation {
+  id                   String        @id @default(cuid())
+  planId               String
+  plan                 ExecutionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  expectedReturn       Float
+  expectedRisk         Float
+  expectedSharpe       Float
+  expectedDrawdown     Float
+  diversificationScore Float?
+  stressDrawdown       Float?
+  portfolioBefore      Json?
+  portfolioAfter       Json
+  stressScenarioId     String?
+  createdAt            DateTime      @default(now())
+
+  @@index([planId, createdAt])
+}
+
+model ExecutionPolicy {
+  id                   String   @id @default(cuid())
+  actionType           String
+  autoExecute          Boolean  @default(false)
+  requireApproval      Boolean  @default(true)
+  maxAllocationChange  Float?
+  maxTradeAmount       Float?
+  maxPortfolioRisk     Float?
+  maxDrawdownAllowed   Float?
+  minConfidenceAuto    Float?
+  createdAt            DateTime @default(now())
+
+  @@unique([actionType])
+  @@index([actionType])
+}
+
+model ExecutionApproval {
+  id         String        @id @default(cuid())
+  planId     String
+  plan       ExecutionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approved   Boolean
+  approvedAt DateTime?
+  note       String?       @db.Text
+  createdAt  DateTime      @default(now())
+
+  @@index([planId, userId])
+  @@index([userId, createdAt])
+}
+
+/// نتیجهٔ اجرای (یا شبیه‌سازی نهایی) هر اکشن / پلان
+model ExecutionResult {
+  id                String        @id @default(cuid())
+  planId            String
+  plan              ExecutionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  userId            String?
+  user              User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  actionType        String
+  status            String
+  expectedReturn    Float?
+  realizedReturn    Float?
+  expectedRisk      Float?
+  realizedRisk      Float?
+  expectedSharpe    Float?
+  realizedSharpe    Float?
+  slippage          Float?
+  transactionCost   Float?
+  portfolioBefore   Json?
+  portfolioAfter    Json?
+
+  executedAt DateTime @default(now())
+  metadata   Json?
+  outcome    ExecutionOutcome?
+  portfolioTransactions PortfolioTransaction[]
+  userActions           UserAction[]
+
+  @@index([planId, executedAt])
+  @@index([userId, executedAt])
+  @@index([actionType, status])
+}
+
+/// خروجی یادگیری از اجرا (هم‌تراز DecisionOutcome)
+model ExecutionOutcome {
+  id                String          @id @default(cuid())
+  executionResultId String          @unique
+  executionResult   ExecutionResult @relation(fields: [executionResultId], references: [id], onDelete: Cascade)
+  horizon           LearningHorizon @default(D30)
+  expectedReturn    Float?
+  realizedReturn    Float?
+  success           Boolean?
+  rewardScore       Float?
+  riskPenalty       Float?
+  evaluatedAt       DateTime        @default(now())
+  metadata          Json?
+
+  @@index([evaluatedAt])
 }
 
 /// یال گراف بین دو خودرو
@@ -1419,4 +1630,77 @@ model IntelligenceSnapshot {
   createdAt      DateTime @default(now())
 
   @@index([snapshotDate])
+}
+
+/// سبد واقعی کاربر — دفتر کل، موقعیت‌ها، تراکنش و اسنپ‌شات عملکرد
+model Portfolio {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String?
+  baseCurrency String?  @default("IRR")
+  createdAt    DateTime @default(now())
+
+  positions    PortfolioPosition[]
+  transactions PortfolioTransaction[]
+  snapshots    PortfolioSnapshot[]
+
+  @@index([userId, createdAt])
+}
+
+model PortfolioPosition {
+  id          String    @id @default(cuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  assetId     String
+  assetType   String
+  quantity    Float
+  avgPrice    Float?
+  marketValue Float?
+  weight      Float?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([portfolioId, assetId, assetType])
+  @@index([portfolioId])
+}
+
+model PortfolioTransaction {
+  id                String           @id @default(cuid())
+  portfolioId       String
+  portfolio         Portfolio          @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  assetId           String
+  assetType         String
+  type              String
+  quantity          Float
+  price             Float
+  amount            Float
+  fee               Float?
+  executionResultId String?
+  executionResult   ExecutionResult? @relation(fields: [executionResultId], references: [id], onDelete: SetNull)
+  executedAt        DateTime
+  createdAt         DateTime         @default(now())
+
+  @@index([portfolioId, executedAt])
+  @@index([executionResultId])
+}
+
+model PortfolioSnapshot {
+  id            String    @id @default(cuid())
+  portfolioId   String
+  portfolio     Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  snapshotDate  DateTime
+  totalValue    Float
+  cashValue     Float
+  investedValue Float
+  return1d      Float?
+  return7d      Float?
+  return30d     Float?
+  return90d     Float?
+  sharpe        Float?
+  volatility    Float?
+  drawdown      Float?
+  positions     Json
+  createdAt     DateTime  @default(now())
+
+  @@index([portfolioId, snapshotDate])
 }
