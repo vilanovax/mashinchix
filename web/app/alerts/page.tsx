@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { AlertsView } from "./alerts-view";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 function AlertsFallback() {
   return (
@@ -15,8 +16,10 @@ function AlertsFallback() {
 
 export default function AlertsPage() {
   return (
-    <Suspense fallback={<AlertsFallback />}>
-      <AlertsView />
-    </Suspense>
+    <RequireAuth>
+      <Suspense fallback={<AlertsFallback />}>
+        <AlertsView />
+      </Suspense>
+    </RequireAuth>
   );
 }

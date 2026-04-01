@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress";
 import { CardSkeleton } from "@/components/ui/skeleton";
-import { ErrorPanel, NeedUserIdHint } from "@/components/ui/query-states";
+import { ErrorPanel } from "@/components/ui/query-states";
 import {
   usePortfolioState,
   usePortfolioPerformance,
@@ -15,33 +15,25 @@ import { useIntelligenceOpportunities } from "@/lib/hooks/use-intelligence";
 import { useIntelligenceStrategy } from "@/lib/hooks/use-intelligence";
 import { useIntelligenceDecision } from "@/lib/hooks/use-intelligence";
 import { useAnalyticsAlerts } from "@/lib/hooks/use-alerts";
-import { useResolvedUserId } from "@/lib/use-resolved-user-id";
+import { useSessionOrDevUserId } from "@/lib/use-resolved-user-id";
 import { MiniPortfolioChart } from "@/components/charts/mini-line";
 import { fmtIRR, fmtRatioAsPct } from "@/lib/format";
 import Link from "next/link";
 
 export function DashboardView() {
-  const userId = useResolvedUserId();
-  const port = usePortfolioState(userId);
-  const perf = usePortfolioPerformance(userId);
+  const devId = useSessionOrDevUserId();
+  const port = usePortfolioState(devId);
+  const perf = usePortfolioPerformance(devId);
   const market = useMarketOverview();
   const opps = useIntelligenceOpportunities(12);
-  const strat = useIntelligenceStrategy(userId || undefined);
-  const dec = useIntelligenceDecision(userId || undefined);
+  const strat = useIntelligenceStrategy(devId);
+  const dec = useIntelligenceDecision(devId);
   const analyticsAlerts = useAnalyticsAlerts(20);
 
   const loading =
-    (!!userId && (port.isLoading || perf.isLoading)) ||
+    (port.isLoading || perf.isLoading) ||
     market.isLoading ||
     opps.isLoading;
-
-  if (!userId) {
-    return (
-      <AppShell title="داشبورد">
-        <NeedUserIdHint />
-      </AppShell>
-    );
-  }
 
   if (port.isError || perf.isError) {
     return (
@@ -289,7 +281,11 @@ export function DashboardView() {
 
         <div className="text-center">
           <Link
-            href={`/today?userId=${encodeURIComponent(userId)}`}
+            href={
+              devId
+                ? `/today?userId=${encodeURIComponent(devId)}`
+                : "/today"
+            }
             className="inline-flex rounded-xl bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
           >
             اقدام امروز

@@ -1,9 +1,11 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
 import { MiniPortfolioChart } from "@/components/charts/mini-line";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 export default function PerformancePage() {
   return (
+    <RequireAuth>
     <AppShell title="عملکرد">
       <div className="mx-auto max-w-4xl space-y-4">
         <Card title="بازده تجمعی">
@@ -22,5 +24,6 @@ export default function PerformancePage() {
         </div>
       </div>
     </AppShell>
+    </RequireAuth>
   );
 }

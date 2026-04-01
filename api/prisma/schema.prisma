@@ -57,6 +57,8 @@ enum RecommendationSource {
 
 model User {
   id                String            @id @default(cuid())
+  email             String?           @unique
+  passwordHash      String?
   name              String?
   budget            Decimal?          @db.Decimal(18, 0)
   riskLevel         RiskLevel?
@@ -71,6 +73,8 @@ model User {
 
   wishlist UserWishlist[]
   profile  UserProfile?
+  sessions UserSession[]
+  settings UserSettings?
 
   userEvents             UserEvent[]
   recommendationSessions RecommendationSession[]
@@ -90,6 +94,35 @@ model User {
   userActions            UserAction[]
   behaviorProfile        UserBehaviorProfile?
   decisionFeedbacks      UserDecisionFeedback[]
+}
+
+model UserSession {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// JWT تازه‌سازی با claim جداگانه به این id ارجاع می‌دهد؛ برای ابطال نشست
+  revokedAt DateTime?
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model UserSettings {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                String?
+  language             String?
+  currency             String?
+  timezone             String?
+  defaultPortfolioId   String?
+  notificationsEnabled Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 /// لایهٔ محصول: نمای روزانهٔ اقدامات (Today Action / Advisor)

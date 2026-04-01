@@ -36,6 +36,7 @@ export async function apiFetch<T = unknown>(
   const url = path.startsWith("http") ? path : `${API_URL}${path}`;
   const res = await fetch(url, {
     ...options,
+    credentials: options?.credentials ?? "include",
     headers: apiHeaders(options?.headers),
     cache: "no-store",
   });

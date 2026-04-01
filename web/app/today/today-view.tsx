@@ -5,13 +5,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress";
 import { CardSkeleton } from "@/components/ui/skeleton";
-import { ErrorPanel, NeedUserIdHint } from "@/components/ui/query-states";
+import { ErrorPanel } from "@/components/ui/query-states";
 import { useTodayAdvisor } from "@/lib/hooks/use-advisor";
 import { usePortfolioState } from "@/lib/hooks/use-portfolio";
 import { useUserTriggersAndNotifications } from "@/lib/hooks/use-alerts";
 import { useMarketOverview } from "@/lib/hooks/use-market";
 import { useIntelligenceOpportunities } from "@/lib/hooks/use-intelligence";
-import { useResolvedUserId } from "@/lib/use-resolved-user-id";
+import { useSessionOrDevUserId } from "@/lib/use-resolved-user-id";
 import { fmtIRR, fmtRatioAsPct } from "@/lib/format";
 import type { TodayActionPlanResponse } from "./today-types";
 
@@ -29,20 +29,12 @@ function oppLine(o: unknown): string {
 }
 
 export function TodayView() {
-  const userId = useResolvedUserId();
-  const advisor = useTodayAdvisor(userId);
-  const portfolio = usePortfolioState(userId);
-  const triggers = useUserTriggersAndNotifications(userId, 30);
+  const devId = useSessionOrDevUserId();
+  const advisor = useTodayAdvisor(devId);
+  const portfolio = usePortfolioState(devId);
+  const triggers = useUserTriggersAndNotifications(devId, 30);
   const market = useMarketOverview();
   const extraOpps = useIntelligenceOpportunities(8);
-
-  if (!userId) {
-    return (
-      <AppShell title="اقدام امروز">
-        <NeedUserIdHint />
-      </AppShell>
-    );
-  }
 
   if (advisor.isError) {
     return (

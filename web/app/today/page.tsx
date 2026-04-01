@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { TodayView } from "./today-view";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 function TodayFallback() {
   return (
@@ -18,8 +19,10 @@ function TodayFallback() {
 
 export default function TodayPage() {
   return (
-    <Suspense fallback={<TodayFallback />}>
-      <TodayView />
-    </Suspense>
+    <RequireAuth>
+      <Suspense fallback={<TodayFallback />}>
+        <TodayView />
+      </Suspense>
+    </RequireAuth>
   );
 }

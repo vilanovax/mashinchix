@@ -7,6 +7,7 @@ import { ScenarioModule } from '../scenario/scenario.module';
 import { IntelligenceOverviewService } from './intelligence-overview.service';
 import { IntelligenceBriefingService } from './intelligence-briefing.service';
 import { IntelligenceController } from './intelligence.controller';
+import { MeController } from './me.controller';
 import { OwnershipCostService } from './ownership-cost.service';
 import { CarIntelligenceViewService } from './car-intelligence-view.service';
 
@@ -18,7 +19,7 @@ import { CarIntelligenceViewService } from './car-intelligence-view.service';
     PortfolioModule,
     ScenarioModule,
   ],
-  controllers: [IntelligenceController],
+  controllers: [IntelligenceController, MeController],
   providers: [
     IntelligenceOverviewService,
     IntelligenceBriefingService,

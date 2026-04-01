@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { MarketView } from "./market-view";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 function MarketFallback() {
   return (
@@ -16,8 +17,10 @@ function MarketFallback() {
 
 export default function MarketPage() {
   return (
-    <Suspense fallback={<MarketFallback />}>
-      <MarketView />
-    </Suspense>
+    <RequireAuth>
+      <Suspense fallback={<MarketFallback />}>
+        <MarketView />
+      </Suspense>
+    </RequireAuth>
   );
 }

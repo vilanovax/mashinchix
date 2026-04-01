@@ -5,7 +5,10 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { ExecutionEngineService } from './execution-engine.service';
 import { PortfolioAutoRebalanceService } from './portfolio-auto-rebalance.service';
@@ -98,6 +101,16 @@ export class ExecutionController {
   @Get('history')
   history(
     @Query('userId') userId?: string,
+    @Query('limit') limitRaw?: string,
+  ) {
+    const limit = Math.min(Math.max(Number(limitRaw) || 40, 1), 200);
+    return this.engine.listHistory({ userId, limit });
+  }
+
+  @Get('history/me')
+  @UseGuards(JwtAuthGuard)
+  historyMe(
+    @CurrentUser('sub') userId: string,
     @Query('limit') limitRaw?: string,
   ) {
     const limit = Math.min(Math.max(Number(limitRaw) || 40, 1), 200);

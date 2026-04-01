@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/skeleton";
-import { ErrorPanel, NeedUserIdHint } from "@/components/ui/query-states";
+import { ErrorPanel } from "@/components/ui/query-states";
 import { MiniPortfolioChart } from "@/components/charts/mini-line";
 import { ProgressBar } from "@/components/ui/progress";
 import {
@@ -12,7 +12,7 @@ import {
   usePortfolioTransactions,
   usePortfolioPerformance,
 } from "@/lib/hooks/use-portfolio";
-import { useResolvedUserId } from "@/lib/use-resolved-user-id";
+import { useSessionOrDevUserId } from "@/lib/use-resolved-user-id";
 import { fmtIRR, fmtRatioAsPct } from "@/lib/format";
 import {
   Pie,
@@ -26,19 +26,11 @@ import {
 const PIE_COLORS = ["#8b5cf6", "#10b981", "#0ea5e9", "#f59e0b", "#ec4899", "#a1a1aa"];
 
 export function PortfolioView() {
-  const userId = useResolvedUserId();
-  const stateQ = usePortfolioState(userId);
-  const historyQ = usePortfolioHistory(userId, 90);
-  const txQ = usePortfolioTransactions(userId, 80);
-  const perfQ = usePortfolioPerformance(userId);
-
-  if (!userId) {
-    return (
-      <AppShell title="سبد سرمایه‌گذاری">
-        <NeedUserIdHint />
-      </AppShell>
-    );
-  }
+  const devId = useSessionOrDevUserId();
+  const stateQ = usePortfolioState(devId);
+  const historyQ = usePortfolioHistory(devId, 90);
+  const txQ = usePortfolioTransactions(devId, 80);
+  const perfQ = usePortfolioPerformance(devId);
 
   if (stateQ.isError) {
     return (

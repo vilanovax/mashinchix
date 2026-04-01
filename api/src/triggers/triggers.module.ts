@@ -4,10 +4,11 @@ import { IntelligenceDeliveryModule } from '../delivery/intelligence-delivery.mo
 import { LearningModule } from '../learning/learning.module';
 import { TriggerEngineService } from './trigger-engine.service';
 import { TriggersController } from './triggers.controller';
+import { AlertsController } from './alerts.controller';
 
 @Module({
   imports: [PrismaModule, IntelligenceDeliveryModule, LearningModule],
-  controllers: [TriggersController],
+  controllers: [TriggersController, AlertsController],
   providers: [TriggerEngineService],
   exports: [TriggerEngineService],
 })

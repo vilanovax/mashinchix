@@ -7,7 +7,10 @@ import {
   Post,
   Body,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PortfolioRecommendationService } from './portfolio-recommendation.service';
 import { StrategyAdvisorService } from './strategy-advisor.service';
 import { RecommendPortfolioDto } from './dto/portfolio-recommend.dto';
@@ -90,6 +93,75 @@ export class PortfolioController {
   @Get('market-strategy')
   marketStrategy(@Query('userId') userId?: string) {
     return this.strategyAdvisor.recommendStrategy({ userId });
+  }
+
+  @Get('market-strategy/session')
+  @UseGuards(JwtAuthGuard)
+  marketStrategyMe(@CurrentUser('sub') userId: string) {
+    return this.strategyAdvisor.recommendStrategy({ userId });
+  }
+
+  @Get('allocation')
+  @UseGuards(JwtAuthGuard)
+  async userAllocationMe(@CurrentUser('sub') userId: string) {
+    const row = await this.prisma.userPortfolioRecommendation.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) {
+      throw new NotFoundException('توصیهٔ ذخیره‌شده‌ای برای این کاربر نیست');
+    }
+    return row;
+  }
+
+  @Get('performance')
+  @UseGuards(JwtAuthGuard)
+  portfolioPerformanceMe(@CurrentUser('sub') userId: string) {
+    return this.performance.getPerformance(userId);
+  }
+
+  @Get('history')
+  @UseGuards(JwtAuthGuard)
+  portfolioHistoryMe(
+    @CurrentUser('sub') userId: string,
+    @Query('take') take?: string,
+  ) {
+    const t = take != null ? parseInt(take, 10) : 60;
+    return this.performance.getHistory(
+      userId,
+      Number.isFinite(t) ? t : 60,
+    );
+  }
+
+  @Get('positions')
+  @UseGuards(JwtAuthGuard)
+  portfolioPositionsMe(@CurrentUser('sub') userId: string) {
+    return this.performance.getPositions(userId);
+  }
+
+  @Get('transactions')
+  @UseGuards(JwtAuthGuard)
+  portfolioTransactionsMe(
+    @CurrentUser('sub') userId: string,
+    @Query('take') take?: string,
+  ) {
+    const t = take != null ? parseInt(take, 10) : 80;
+    return this.performance.getTransactions(
+      userId,
+      Number.isFinite(t) ? t : 80,
+    );
+  }
+
+  @Get('value')
+  @UseGuards(JwtAuthGuard)
+  portfolioValueMe(@CurrentUser('sub') userId: string) {
+    return this.performance.getValue(userId);
+  }
+
+  @Get('state')
+  @UseGuards(JwtAuthGuard)
+  portfolioStateMe(@CurrentUser('sub') userId: string) {
+    return this.ledger.getPortfolioState(userId);
   }
 
   @Get('allocation/:userId')

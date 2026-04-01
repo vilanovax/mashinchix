@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PRIMARY_NAV } from "@/lib/nav";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/components/auth/auth-context";
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { status } = useAuth();
 
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-s border-zinc-200/90 bg-white/95 dark:border-zinc-800 dark:bg-zinc-950/80">
@@ -41,10 +43,23 @@ export function AppSidebar() {
           );
         })}
       </nav>
-      <div className="border-t border-zinc-100 p-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-        <Link href="/assistant" className="text-violet-600 hover:underline dark:text-violet-400">
+      <div className="space-y-2 border-t border-zinc-100 p-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+        <Link href="/assistant" className="block text-violet-600 hover:underline dark:text-violet-400">
           دستیار انتخاب خودرو
         </Link>
+        {status === "unauthenticated" ? (
+          <div className="flex flex-col gap-1">
+            <Link
+              href="/login"
+              className="block rounded-lg border border-zinc-200 px-2 py-1.5 text-center text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              ورود
+            </Link>
+            <Link href="/register" className="block text-center hover:underline">
+              ثبت‌نام
+            </Link>
+          </div>
+        ) : null}
       </div>
     </aside>
   );

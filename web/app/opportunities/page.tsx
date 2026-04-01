@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 const rows = [
   "بهترین فرصت خرید",
@@ -13,6 +14,7 @@ const rows = [
 
 export default function OpportunitiesPage() {
   return (
+    <RequireAuth>
     <AppShell title="فرصت‌ها">
       <div className="mx-auto max-w-3xl space-y-3">
         {rows.map((t) => (
@@ -25,5 +27,6 @@ export default function OpportunitiesPage() {
         ))}
       </div>
     </AppShell>
+    </RequireAuth>
   );
 }

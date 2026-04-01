@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   AlertSeverity,
   Prisma,
@@ -364,5 +364,18 @@ export class UserNotificationService {
       byType.set(r.type, arr);
     }
     return Object.fromEntries(byType);
+  }
+
+  async markAsRead(userId: string, notificationId: string) {
+    const row = await this.prisma.userNotification.findFirst({
+      where: { id: notificationId, userId },
+    });
+    if (!row) {
+      throw new NotFoundException('اعلان یافت نشد');
+    }
+    return this.prisma.userNotification.update({
+      where: { id: notificationId },
+      data: { isRead: true },
+    });
   }
 }

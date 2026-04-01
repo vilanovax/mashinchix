@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Prisma } from '@prisma/client';
 import { UserBehaviorService } from './user-behavior.service';
 import { RecordUserActionDto } from './dto/record-user-action.dto';
@@ -31,6 +33,24 @@ export class UserBehaviorController {
       rating: dto.rating,
       note: dto.note,
     });
+  }
+
+  @Get('me/behavior-profile')
+  @UseGuards(JwtAuthGuard)
+  behaviorProfileMe(@CurrentUser('sub') userId: string) {
+    return this.behavior.getBehaviorProfile(userId);
+  }
+
+  @Get('me/preferences')
+  @UseGuards(JwtAuthGuard)
+  preferencesMe(@CurrentUser('sub') userId: string) {
+    return this.behavior.getPreferencesPayload(userId);
+  }
+
+  @Get('me/risk-profile')
+  @UseGuards(JwtAuthGuard)
+  riskProfileMe(@CurrentUser('sub') userId: string) {
+    return this.behavior.getRiskProfilePayload(userId);
   }
 
   @Get('behavior-profile/:userId')

@@ -3,56 +3,79 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
-export function usePortfolioState(userId: string) {
+/** اگر userId خالی باشد مسیرهای نشست (JWT) استفاده می‌شود */
+export function usePortfolioState(userId?: string) {
+  const session = !userId;
   return useQuery({
-    queryKey: ["portfolio-state", userId],
-    queryFn: () => apiFetch(`/portfolio/state/${encodeURIComponent(userId)}`),
-    enabled: !!userId,
-  });
-}
-
-export function usePortfolioPerformance(userId: string) {
-  return useQuery({
-    queryKey: ["portfolio-performance", userId],
-    queryFn: () => apiFetch(`/portfolio/performance/${encodeURIComponent(userId)}`),
-    enabled: !!userId,
-  });
-}
-
-export function usePortfolioPositions(userId: string) {
-  return useQuery({
-    queryKey: ["portfolio-positions", userId],
-    queryFn: () => apiFetch(`/portfolio/positions/${encodeURIComponent(userId)}`),
-    enabled: !!userId,
-  });
-}
-
-export function usePortfolioHistory(userId: string, take = 60) {
-  return useQuery({
-    queryKey: ["portfolio-history", userId, take],
+    queryKey: ["portfolio-state", userId ?? "me"],
     queryFn: () =>
-      apiFetch(
-        `/portfolio/history/${encodeURIComponent(userId)}?take=${take}`,
-      ),
-    enabled: !!userId,
+      session
+        ? apiFetch(`/portfolio/state`)
+        : apiFetch(`/portfolio/state/${encodeURIComponent(userId!)}`),
+    enabled: session || !!userId,
   });
 }
 
-export function usePortfolioTransactions(userId: string, take = 80) {
+export function usePortfolioPerformance(userId?: string) {
+  const session = !userId;
   return useQuery({
-    queryKey: ["portfolio-transactions", userId, take],
+    queryKey: ["portfolio-performance", userId ?? "me"],
     queryFn: () =>
-      apiFetch(
-        `/portfolio/transactions/${encodeURIComponent(userId)}?take=${take}`,
-      ),
-    enabled: !!userId,
+      session
+        ? apiFetch(`/portfolio/performance`)
+        : apiFetch(`/portfolio/performance/${encodeURIComponent(userId!)}`),
+    enabled: session || !!userId,
   });
 }
 
-export function usePortfolioValue(userId: string) {
+export function usePortfolioPositions(userId?: string) {
+  const session = !userId;
   return useQuery({
-    queryKey: ["portfolio-value", userId],
-    queryFn: () => apiFetch(`/portfolio/value/${encodeURIComponent(userId)}`),
-    enabled: !!userId,
+    queryKey: ["portfolio-positions", userId ?? "me"],
+    queryFn: () =>
+      session
+        ? apiFetch(`/portfolio/positions`)
+        : apiFetch(`/portfolio/positions/${encodeURIComponent(userId!)}`),
+    enabled: session || !!userId,
+  });
+}
+
+export function usePortfolioHistory(userId?: string, take = 60) {
+  const session = !userId;
+  return useQuery({
+    queryKey: ["portfolio-history", userId ?? "me", take],
+    queryFn: () =>
+      session
+        ? apiFetch(`/portfolio/history?take=${take}`)
+        : apiFetch(
+            `/portfolio/history/${encodeURIComponent(userId!)}?take=${take}`,
+          ),
+    enabled: session || !!userId,
+  });
+}
+
+export function usePortfolioTransactions(userId?: string, take = 80) {
+  const session = !userId;
+  return useQuery({
+    queryKey: ["portfolio-transactions", userId ?? "me", take],
+    queryFn: () =>
+      session
+        ? apiFetch(`/portfolio/transactions?take=${take}`)
+        : apiFetch(
+            `/portfolio/transactions/${encodeURIComponent(userId!)}?take=${take}`,
+          ),
+    enabled: session || !!userId,
+  });
+}
+
+export function usePortfolioValue(userId?: string) {
+  const session = !userId;
+  return useQuery({
+    queryKey: ["portfolio-value", userId ?? "me"],
+    queryFn: () =>
+      session
+        ? apiFetch(`/portfolio/value`)
+        : apiFetch(`/portfolio/value/${encodeURIComponent(userId!)}`),
+    enabled: session || !!userId,
   });
 }

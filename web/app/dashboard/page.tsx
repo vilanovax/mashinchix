@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { DashboardView } from "./dashboard-view";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 function DashboardFallback() {
   return (
@@ -18,8 +19,10 @@ function DashboardFallback() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<DashboardFallback />}>
-      <DashboardView />
-    </Suspense>
+    <RequireAuth>
+      <Suspense fallback={<DashboardFallback />}>
+        <DashboardView />
+      </Suspense>
+    </RequireAuth>
   );
 }

@@ -1,9 +1,11 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 export default function StrategyPage() {
   return (
+    <RequireAuth>
     <AppShell title="استراتژی">
       <div className="mx-auto max-w-3xl space-y-4">
         <Card title="استراتژی فعال">
@@ -14,5 +16,6 @@ export default function StrategyPage() {
         </Card>
       </div>
     </AppShell>
+    </RequireAuth>
   );
 }

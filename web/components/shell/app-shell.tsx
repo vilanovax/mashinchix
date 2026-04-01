@@ -4,24 +4,18 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopbar } from "./app-topbar";
-import { useResolvedUserId } from "@/lib/use-resolved-user-id";
-
 function ShellBody({
   title,
   children,
-  userIdProp,
 }: {
   title: string;
   children: ReactNode;
-  userIdProp?: string;
 }) {
-  const resolved = useResolvedUserId();
-  const userId = userIdProp ?? resolved;
   return (
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <AppSidebar />
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <AppTopbar title={title} userId={userId} />
+        <AppTopbar title={title} />
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
@@ -47,17 +41,13 @@ function ShellFallback({ title, children }: { title: string; children: ReactNode
 export function AppShell({
   title,
   children,
-  userId: userIdProp,
 }: {
   title: string;
   children: ReactNode;
-  userId?: string;
 }) {
   return (
     <Suspense fallback={<ShellFallback title={title}>{children}</ShellFallback>}>
-      <ShellBody title={title} userIdProp={userIdProp}>
-        {children}
-      </ShellBody>
+      <ShellBody title={title}>{children}</ShellBody>
     </Suspense>
   );
 }

@@ -1,8 +1,10 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 export default function HistoryPage() {
   return (
+    <RequireAuth>
     <AppShell title="تاریخچهٔ اجرا">
       <div className="mx-auto max-w-3xl">
         <Card title="پلان‌ها و نتایج اجرا">
@@ -16,5 +18,6 @@ export default function HistoryPage() {
         </Card>
       </div>
     </AppShell>
+    </RequireAuth>
   );
 }

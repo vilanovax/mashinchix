@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { PortfolioView } from "./portfolio-view";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 function PortfolioFallback() {
   return (
@@ -18,8 +19,10 @@ function PortfolioFallback() {
 
 export default function PortfolioPage() {
   return (
-    <Suspense fallback={<PortfolioFallback />}>
-      <PortfolioView />
-    </Suspense>
+    <RequireAuth>
+      <Suspense fallback={<PortfolioFallback />}>
+        <PortfolioView />
+      </Suspense>
+    </RequireAuth>
   );
 }

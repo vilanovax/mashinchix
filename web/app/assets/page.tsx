@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { AssetsView } from "./assets-view";
 import { CardSkeleton } from "@/components/ui/skeleton";
+import { RequireAuth } from "@/components/auth/require-auth";
 
 function AssetsFallback() {
   return (
@@ -12,8 +13,10 @@ function AssetsFallback() {
 
 export default function AssetsPage() {
   return (
-    <Suspense fallback={<AssetsFallback />}>
-      <AssetsView />
-    </Suspense>
+    <RequireAuth>
+      <Suspense fallback={<AssetsFallback />}>
+        <AssetsView />
+      </Suspense>
+    </RequireAuth>
   );
 }

@@ -27,6 +27,7 @@ import { LearningModule } from './learning/learning.module';
 import { ExecutionModule } from './execution/execution.module';
 import { AdvisorModule } from './advisor/advisor.module';
 import { UserBehaviorModule } from './user-behavior/user-behavior.module';
+import { AuthModule } from './auth/auth.module';
 
 const bullDisabled = process.env.DISABLE_BULLMQ === 'true';
 
@@ -49,6 +50,7 @@ const queueImports = bullDisabled
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    AuthModule,
     ScheduleModule.forRoot(),
     ...queueImports,
     PrismaModule,

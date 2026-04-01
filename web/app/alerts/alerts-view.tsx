@@ -3,13 +3,13 @@
 import { AppShell } from "@/components/shell/app-shell";
 import { Card } from "@/components/ui/card";
 import { CardSkeleton } from "@/components/ui/skeleton";
-import { ErrorPanel, NeedUserIdHint } from "@/components/ui/query-states";
+import { ErrorPanel } from "@/components/ui/query-states";
 import {
   useUserTriggersAndNotifications,
   useMarketAlertsOverview,
   useAnalyticsAlerts,
 } from "@/lib/hooks/use-alerts";
-import { useResolvedUserId } from "@/lib/use-resolved-user-id";
+import { useSessionOrDevUserId } from "@/lib/use-resolved-user-id";
 
 function lineItem(x: unknown): string {
   if (typeof x === "object" && x && "title" in x) {
@@ -22,18 +22,10 @@ function lineItem(x: unknown): string {
 }
 
 export function AlertsView() {
-  const userId = useResolvedUserId();
-  const userPack = useUserTriggersAndNotifications(userId, 40);
+  const devId = useSessionOrDevUserId();
+  const userPack = useUserTriggersAndNotifications(devId, 40);
   const market = useMarketAlertsOverview(32);
   const analytics = useAnalyticsAlerts(24);
-
-  if (!userId) {
-    return (
-      <AppShell title="هشدارها">
-        <NeedUserIdHint />
-      </AppShell>
-    );
-  }
 
   return (
     <AppShell title="هشدارها">
