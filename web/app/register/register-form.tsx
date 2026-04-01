@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth/auth-context";
@@ -12,6 +12,12 @@ export function RegisterForm() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.replace("/dashboard");
+    }
+  }, [status, router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +31,6 @@ export function RegisterForm() {
   }
 
   if (status === "authenticated") {
-    router.replace("/dashboard");
     return (
       <p className="text-center text-sm text-zinc-500">در حال هدایت…</p>
     );

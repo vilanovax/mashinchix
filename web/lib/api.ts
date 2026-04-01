@@ -1,4 +1,14 @@
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+function resolveApiBaseUrl(): string {
+  const fromEnv = (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
+  if (fromEnv) return fromEnv;
+  // بدون .env.local در `next dev` به همان پورت پیش‌فرض نمونهٔ api می‌رویم
+  if (process.env.NODE_ENV === "development") {
+    return "http://localhost:3001";
+  }
+  return "";
+}
+
+const API_URL = resolveApiBaseUrl();
 
 function apiHeaders(init?: HeadersInit): HeadersInit {
   const h: Record<string, string> = {
@@ -30,16 +40,28 @@ export async function apiFetch<T = unknown>(
 ): Promise<T> {
   if (!API_URL) {
     throw new Error(
-      "NEXT_PUBLIC_API_URL تنظیم نشده — آدرس API بک‌اند را در .env.local بگذارید.",
+      "NEXT_PUBLIC_API_URL تنظیم نشده. در ریشهٔ web فایل .env.local بسازید (مثال: web/.env.example) یا در استقرار مقداردهی کنید.",
     );
   }
   const url = path.startsWith("http") ? path : `${API_URL}${path}`;
-  const res = await fetch(url, {
-    ...options,
-    credentials: options?.credentials ?? "include",
-    headers: apiHeaders(options?.headers),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...options,
+      credentials: options?.credentials ?? "include",
+      headers: apiHeaders(options?.headers),
+      cache: "no-store",
+    });
+  } catch {
+    const base = API_URL;
+    const hint =
+      process.env.NODE_ENV === "development"
+        ? ` بک‌اند را اجرا کنید؛ مثال: cd api && PORT=3001 npm run start:dev — آدرس فعلی: ${base}`
+        : ` آدرس API: ${base}`;
+    throw new Error(
+      `سرور API در دسترس نیست (اتصال برقرار نشد).${hint} اگر پورت API عوض شده، NEXT_PUBLIC_API_URL در web/.env.local را هماهنگ کنید.`,
+    );
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");

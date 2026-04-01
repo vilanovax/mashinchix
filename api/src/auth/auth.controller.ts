@@ -15,7 +15,6 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from './decorators/current-user.decorator';
 
 @Controller('auth')
@@ -62,14 +61,20 @@ export class AuthController {
     };
   }
 
-  @UseGuards(AuthGuard('local'))
+  /** بدون Passport local تا ابتدا ValidationPipe روی بدنه اجرا شود و با Nest هم‌تراز بماند */
   @Post('login')
   async login(
-    @Body() _dto: LoginDto,
-    @Req() req: Request & { user: { sub: string; email: string } },
+    @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const out = await this.auth.login(req.user);
+    const row = await this.auth.validateCredentials(dto.email, dto.password);
+    if (!row) {
+      throw new UnauthorizedException('ایمیل یا رمز نادرست است');
+    }
+    const out = await this.auth.login({
+      sub: row.id,
+      email: row.email,
+    });
     this.attachCookies(res, out.accessToken, out.refreshToken);
     return {
       user: out.user,
