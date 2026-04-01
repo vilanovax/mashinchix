@@ -28,6 +28,8 @@ type AuthContextValue = {
   register: (email: string, password: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  /** بارگذاری مجدد کاربر از سرور (مثلاً بعد از ویزارد) */
+  reloadUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -89,6 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadMe();
   }, [loadMe]);
 
+  const reloadUser = useCallback(async () => {
+    await loadMe();
+  }, [loadMe]);
+
   const value = useMemo(
     () => ({
       user,
@@ -97,8 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       refreshSession,
+      reloadUser,
     }),
-    [user, status, login, register, logout, refreshSession],
+    [user, status, login, register, logout, refreshSession, reloadUser],
   );
 
   return (

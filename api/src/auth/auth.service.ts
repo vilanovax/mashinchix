@@ -6,9 +6,11 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { PatchUserSettingsDto } from './dto/patch-user-settings.dto';
+import type { PatchWizardDto } from './dto/patch-wizard.dto';
 import type { AuthUserShape } from './decorators/current-user.decorator';
 
 type RefreshJwtPayload = { sub: string; sid: string; typ: string };
@@ -164,6 +166,66 @@ export class AuthService {
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  private static readonly WIZARD_SCORE_KEYS = [
+    'performance',
+    'comfort',
+    'economy',
+    'reliability',
+    'market',
+    'ownership',
+    'prestige',
+  ] as const;
+
+  /** ویزارد MVP: User + UserProfile.scoreWeights برای موتور v3 */
+  async patchWizard(userId: string, dto: PatchWizardDto) {
+    const raw = dto.preferences.weights;
+    const nums = AuthService.WIZARD_SCORE_KEYS.map((k) =>
+      Math.max(0, Number(raw[k] ?? 1)),
+    );
+    const sum = nums.reduce((a, b) => a + b, 0) || 1;
+    const scoreWeights: Record<string, number> = {};
+    AuthService.WIZARD_SCORE_KEYS.forEach((k, i) => {
+      scoreWeights[k] = nums[i] / sum;
+    });
+    scoreWeights.risk = Math.max(0, Number(raw.risk ?? 0.12));
+
+    const budgetDec = new Prisma.Decimal(String(Math.round(dto.budget)));
+    const prefsJson: Prisma.InputJsonValue = {
+      weights: scoreWeights,
+    };
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          budget: budgetDec,
+          listingCondition: dto.listingCondition,
+          holdYears: dto.holdYears ?? null,
+          usageTags: dto.usageTags,
+          usageType: dto.usageTags[0] ?? null,
+          riskLevel: dto.riskLevel,
+          previousCarIds: dto.previousCarIds ?? [],
+          preferences: prefsJson,
+          wizardCompletedAt: new Date(),
+        },
+      }),
+      this.prisma.userProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          maxBudget: budgetDec,
+          scoreWeights: scoreWeights as Prisma.InputJsonValue,
+        },
+        update: {
+          maxBudget: budgetDec,
+          scoreWeights: scoreWeights as Prisma.InputJsonValue,
+        },
+      }),
+    ]);
+
+    return this.toPublicUser(userId);
   }
 
   async patchUserSettings(userId: string, dto: PatchUserSettingsDto) {

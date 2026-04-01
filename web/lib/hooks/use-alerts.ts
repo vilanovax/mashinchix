@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 
 /** با JWT: GET /alerts — با userId اختیاری: مسیر قدیمی */
@@ -29,5 +29,32 @@ export function useAnalyticsAlerts(limit = 48) {
   return useQuery({
     queryKey: ["analytics", "alerts", limit],
     queryFn: () => apiFetch(`/analytics/alerts?limit=${limit}`),
+  });
+}
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (notificationId: string) =>
+      apiFetch(`/alerts/notifications/${encodeURIComponent(notificationId)}/read`, {
+        method: "PATCH",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["alerts-pack"] });
+    },
+  });
+}
+
+export function useExecutionHistoryMe(limit = 40) {
+  return useQuery({
+    queryKey: ["execution", "history", "me", limit],
+    queryFn: () => apiFetch(`/execution/history/me?limit=${limit}`),
+  });
+}
+
+export function useIntelligenceHistory(limit = 24) {
+  return useQuery({
+    queryKey: ["intelligence", "history", limit],
+    queryFn: () => apiFetch(`/intelligence/history?limit=${limit}`),
   });
 }

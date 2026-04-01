@@ -14,6 +14,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { PatchWizardDto } from './dto/patch-wizard.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 
@@ -129,5 +130,17 @@ export class AuthController {
   ) {
     if (!userId) throw new UnauthorizedException();
     return this.auth.patchUserSettings(userId, dto);
+  }
+
+  @Patch('wizard')
+  @UseGuards(JwtAuthGuard)
+  async patchWizard(
+    @CurrentUser('sub') userId: string | undefined,
+    @Body() dto: PatchWizardDto,
+  ) {
+    if (!userId) throw new UnauthorizedException();
+    const user = await this.auth.patchWizard(userId, dto);
+    if (!user) throw new UnauthorizedException();
+    return { user };
   }
 }

@@ -12,6 +12,8 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/assets", label: "دارایی‌ها" },
   { href: "/opportunities", label: "فرصت‌ها" },
   { href: "/alerts", label: "هشدارها" },
+  { href: "/notifications", label: "اعلان‌ها" },
+  { href: "/events", label: "رویدادها" },
   { href: "/strategy", label: "استراتژی" },
   { href: "/performance", label: "عملکرد" },
   { href: "/history", label: "تاریخچه اجرا" },

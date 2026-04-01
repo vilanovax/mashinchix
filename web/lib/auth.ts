@@ -63,3 +63,24 @@ export async function authPatchSettings(
     body: JSON.stringify(patch),
   });
 }
+
+export type WizardPayload = {
+  budget: number;
+  listingCondition: "NEW" | "USED" | "EITHER";
+  holdYears?: number;
+  usageTags: string[];
+  preferences: {
+    weights: Record<string, number>;
+  };
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  previousCarIds: string[];
+};
+
+export async function authPatchWizard(
+  body: WizardPayload,
+): Promise<{ user: AuthUser }> {
+  return apiFetch<{ user: AuthUser }>("/auth/wizard", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
